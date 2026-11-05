@@ -55,6 +55,9 @@ final class TimelineView: NSView {
             editor.needsDisplay?()
         }
 
+        toolStrip.blade.isOn = { [unowned editor] in editor.tool == .blade }
+        toolStrip.blade.toggle = { [unowned editor] in editor.tool = editor.tool == .blade ? .select : .blade }
+
         editor.needsDisplay = { [weak self] in self?.setDirty() }
     }
 
@@ -119,14 +122,26 @@ final class TimelineView: NSView {
 @MainActor
 final class TimelineMetalView: MTKView {
     let editor: EditorController
-    private enum Drag {
+    enum Drag {
         case none
-        case scrub
         case minimapScroll(grabOffset: Double)
         case minimapEdge(left: Bool, fixedFrame: Double)
+        /// Mouse down on a region; becomes a move once the pointer travels.
+        case pressRegion(id: UUID, downX: Double, downFrame: Int64)
+        case move(ids: Set<UUID>, downFrame: Int64)
+        case trim(id: UUID, start: Bool)
+        case fade(id: UUID, end: EditOperations.FadeEnd, ids: Set<UUID>)
+        case fadeShape(id: UUID, end: EditOperations.FadeEnd, ids: Set<UUID>, startValue: Double, downY: Double)
+        case mark(anchor: Int64)
+        /// Mouse down on empty track; a click locates, a drag draws a rubber band.
+        case pressEmpty(downX: Double, additive: Bool)
+        case rubber(anchor: Double, base: Set<UUID>)
     }
 
-    private var drag = Drag.none
+    var drag = Drag.none
+    /// Project at the start of the current drag.
+    var gestureBase = Project()
+    private var trackingArea: NSTrackingArea?
 
     init(editor: EditorController) {
         self.editor = editor
@@ -174,9 +189,9 @@ final class TimelineMetalView: MTKView {
         editor.zoom(by: 1 / max(0.2, 1 + Double(event.magnification)), anchorX: Double(point.x))
     }
 
-    // MARK: Mouse
+    // MARK: Minimap
 
-    private func minimapGeometry() -> (length: Double, scale: Double, windowX: Double, windowW: Double)? {
+    func minimapGeometry() -> (length: Double, scale: Double, windowX: Double, windowW: Double)? {
         let length = Double(editor.documentLength)
         guard length > 0, editor.samplesPerPoint > 0 else { return nil }
         let w = Double(bounds.width)
@@ -185,52 +200,43 @@ final class TimelineMetalView: MTKView {
         return (length, scale, editor.viewStart * scale, max(visible * scale, 4))
     }
 
-    override func mouseDown(with event: NSEvent) {
-        window?.makeFirstResponder(self)
-        let p = convert(event.locationInWindow, from: nil)
-        if p.y < TimelineLayout.minimapHeight {
-            guard let g = minimapGeometry() else { return }
-            let x = Double(p.x)
-            if abs(x - g.windowX) < 6 {
-                drag = .minimapEdge(left: true, fixedFrame: editor.viewStart + editor.samplesPerPoint * Double(bounds.width))
-            } else if abs(x - (g.windowX + g.windowW)) < 6 {
-                drag = .minimapEdge(left: false, fixedFrame: editor.viewStart)
-            } else if x >= g.windowX, x <= g.windowX + g.windowW {
-                drag = .minimapScroll(grabOffset: x - g.windowX)
-            } else {
-                drag = .minimapScroll(grabOffset: g.windowW / 2)
-                minimapScroll(to: x, grabOffset: g.windowW / 2)
-            }
+    func minimapDown(_ x: Double) {
+        guard let g = minimapGeometry() else { return }
+        if abs(x - g.windowX) < 6 {
+            drag = .minimapEdge(left: true, fixedFrame: editor.viewStart + editor.samplesPerPoint * Double(bounds.width))
+        } else if abs(x - (g.windowX + g.windowW)) < 6 {
+            drag = .minimapEdge(left: false, fixedFrame: editor.viewStart)
+        } else if x >= g.windowX, x <= g.windowX + g.windowW {
+            drag = .minimapScroll(grabOffset: x - g.windowX)
         } else {
-            drag = .scrub
-            editor.locate(Int64(editor.frame(forX: Double(p.x)).rounded()))
+            drag = .minimapScroll(grabOffset: g.windowW / 2)
+            minimapScroll(to: x, grabOffset: g.windowW / 2)
         }
     }
 
-    override func mouseDragged(with event: NSEvent) {
-        let p = convert(event.locationInWindow, from: nil)
-        switch drag {
-        case .none:
-            break
-        case .scrub:
-            editor.locate(Int64(editor.frame(forX: Double(p.x)).rounded()))
-        case let .minimapScroll(grabOffset):
-            minimapScroll(to: Double(p.x), grabOffset: grabOffset)
-        case let .minimapEdge(left, fixedFrame):
-            guard let g = minimapGeometry() else { return }
-            let frameAtMouse = min(max(Double(p.x) / g.scale, 0), g.length)
-            let a = left ? frameAtMouse : fixedFrame
-            let b = left ? fixedFrame : frameAtMouse
-            let span = max(b - a, EditorController.minSamplesPerPoint * Double(bounds.width))
-            editor.setView(start: a, samplesPerPoint: span / Double(bounds.width))
-        }
-    }
-
-    override func mouseUp(with event: NSEvent) { drag = .none }
-
-    private func minimapScroll(to x: Double, grabOffset: Double) {
+    func minimapScroll(to x: Double, grabOffset: Double) {
         guard let g = minimapGeometry() else { return }
         editor.setView(start: (x - grabOffset) / g.scale, samplesPerPoint: editor.samplesPerPoint)
+    }
+
+    func minimapEdge(to x: Double, left: Bool, fixedFrame: Double) {
+        guard let g = minimapGeometry() else { return }
+        let frameAtMouse = min(max(x / g.scale, 0), g.length)
+        let a = left ? frameAtMouse : fixedFrame
+        let b = left ? fixedFrame : frameAtMouse
+        let span = max(b - a, EditorController.minSamplesPerPoint * Double(bounds.width))
+        editor.setView(start: a, samplesPerPoint: span / Double(bounds.width))
+    }
+
+    // MARK: Tracking
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+                                  owner: self, userInfo: nil)
+        addTrackingArea(area)
+        trackingArea = area
     }
 
     override func resetCursorRects() {
@@ -353,6 +359,33 @@ final class LabelsOverlayView: NSView {
             }
         }
         for i in used..<pool.count where !pool[i].isHidden { pool[i].isHidden = true }
+        updateHint(scale: scale)
+    }
+
+    private lazy var hintLayer: CATextLayer = {
+        let l = CATextLayer()
+        l.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+        l.fontSize = 11
+        l.foregroundColor = NSColor.white.cgColor
+        l.backgroundColor = NSColor(white: 0, alpha: 0.75).cgColor
+        l.cornerRadius = 3
+        l.alignmentMode = .center
+        layer?.addSublayer(l)
+        return l
+    }()
+
+    private func updateHint(scale: CGFloat) {
+        guard let text = editor.pointer.hint else {
+            if !hintLayer.isHidden { hintLayer.isHidden = true }
+            return
+        }
+        hintLayer.isHidden = false
+        hintLayer.contentsScale = scale
+        if (hintLayer.string as? String) != text { hintLayer.string = text }
+        let width = CGFloat(text.count) * 6.6 + 12
+        var x = CGFloat(editor.pointer.hintX) + 12
+        if x + width > bounds.width - 4 { x = CGFloat(editor.pointer.hintX) - width - 12 }
+        hintLayer.frame = CGRect(x: max(4, x), y: TimelineLayout.waveTop(bounds.height) + 6, width: width, height: 16)
     }
 
     private func textLayer(at index: Int, scale: CGFloat) -> CATextLayer {

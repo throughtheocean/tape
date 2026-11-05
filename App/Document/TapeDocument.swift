@@ -73,6 +73,38 @@ final class TapeDocument: ObservableObject {
         replaceProject(next, actionName: name)
     }
 
+    // MARK: Gestures
+
+    private var gestureBase: Project?
+
+    var isInGesture: Bool { gestureBase != nil }
+
+    /// Starts a drag that changes the project live (audible while playing) without undo steps.
+    func beginGesture() {
+        gestureBase = project
+    }
+
+    /// Replaces the live project with `change` applied to the state at `beginGesture`.
+    func updateGesture(_ change: (inout Project) -> Void) {
+        guard let base = gestureBase else { return }
+        var next = base
+        change(&next)
+        next.sortRegions()
+        guard next != project else { return }
+        project = next
+        revision += 1
+    }
+
+    /// Ends the drag as one undo step named `name`, or none if nothing changed.
+    func endGesture(_ name: String) {
+        guard let base = gestureBase else { return }
+        gestureBase = nil
+        let final = project
+        guard final != base else { return }
+        project = base
+        replaceProject(final, actionName: name)
+    }
+
     private func replaceProject(_ next: Project, actionName: String) {
         let previous = project
         project = next
@@ -203,4 +235,10 @@ final class TapeDocument: ObservableObject {
     }
 
     var sessionRate: Double { project.sessionRate ?? 48000 }
+
+    /// Source length in session frames, the limit for trimming a region's end.
+    func sourceLength(_ id: UUID) -> Int64 {
+        if let loaded = loaded[id] { return loaded.source.frameCount }
+        return project.source(id)?.sessionFrameCount(sessionRate: sessionRate) ?? 0
+    }
 }

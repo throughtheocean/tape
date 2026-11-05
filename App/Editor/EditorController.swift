@@ -39,12 +39,39 @@ final class EditorController: ObservableObject {
     @Published private(set) var speed = 1
     @Published var errorMessage: String?
     /// Selected region ids.
-    @Published var selection: Set<UUID> = []
+    @Published var selection: Set<UUID> = [] {
+        didSet { if oldValue != selection { needsDisplay?() } }
+    }
     private(set) var playhead: Int64
     /// Timeline span of the recording in progress, drawn as a growing block.
     var recordingSpan: SampleRange? {
         didSet { if oldValue != recordingSpan { needsDisplay?() } }
     }
+
+    enum Tool { case select, blade }
+    @Published var tool: Tool = .select {
+        didSet { needsDisplay?() }
+    }
+    /// Pointer feedback drawn by the timeline: hovered region (fade handles), hovered trim edge,
+    /// blade position, rubber band and a short text next to the pointer while dragging.
+    struct PointerOverlay: Equatable {
+        var hoverRegion: UUID?
+        var hoverEdge: (id: UUID, start: Bool)?
+        var bladeFrame: Int64?
+        var rubberBand: SampleRange?
+        var hint: String?
+        var hintX: Double = 0
+
+        static func == (a: PointerOverlay, b: PointerOverlay) -> Bool {
+            a.hoverRegion == b.hoverRegion && a.hoverEdge?.id == b.hoverEdge?.id && a.hoverEdge?.start == b.hoverEdge?.start
+                && a.bladeFrame == b.bladeFrame && a.rubberBand == b.rubberBand && a.hint == b.hint && a.hintX == b.hintX
+        }
+    }
+    var pointer = PointerOverlay() {
+        didSet { if oldValue != pointer { needsDisplay?() } }
+    }
+    /// Fires when a double click asks the inspector to focus the region name.
+    let focusRegionName = PassthroughSubject<Void, Never>()
 
     static let minSamplesPerPoint = 1.0 / 32
     private var subscriptions: Set<AnyCancellable> = []
@@ -282,6 +309,12 @@ final class EditorController: ObservableObject {
         loopEnabled.toggle()
         updateLoop()
         saveView()
+    }
+
+    /// Sets the range directly, for Shift click and Shift drag marking.
+    func setRange(_ r: SampleRange?) {
+        range = r
+        rangeChanged()
     }
 
     private func rangeChanged() {

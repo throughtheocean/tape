@@ -1,0 +1,166 @@
+# M3: every edit key and mouse gesture on a 6 s stereo 220 Hz tone (288000 frames at 48 kHz).
+# Create the tone first: see docs/report.md, M3.
+wait 1
+import /tmp/tape-m3.wav
+waitLoaded
+fit
+set snap on
+log imported
+
+# Cmd B at the playhead.
+locate f96000
+key cmd+b
+log blade at playhead
+
+# Click selects and locates; F applies the default fade.
+mouse click f200000 wave
+key f
+log click second region and F
+
+# Drag the fade in handle of the first region inward to 0.5 s.
+mouse move 5 top
+mouse down 5 top
+mouse drag f12000 top
+mouse drag f24000 top
+mouse up f24000 top
+log fade in handle drag
+snapshot /tmp/tape-m3-fade.png
+
+# Option drag on the fade midpoint changes the shape continuously.
+mouse down f12000 wave opt
+mouse drag f12000 wave-30 opt
+mouse up f12000 wave-30 opt
+log option drag midpoint
+
+# Move the second region right by 24000.
+mouse down f200000 wave
+mouse drag f212000 wave
+mouse drag f224000 wave
+mouse up f224000 wave
+log move second region
+
+# Trim its end to 280000, then its start back towards 96000: snaps to the first region's end.
+mouse move f311500 wave
+mouse down f311500 wave
+mouse drag f280000 wave
+mouse up f280000 wave
+log trim end
+mouse down f120500 wave
+mouse drag f97000 wave
+mouse up f97000 wave
+log trim start snapped to region edge
+
+# Shift drag marks a range, Cmd B blades at both range edges.
+mouse down f30000 wave shift
+mouse drag f60000 wave shift
+mouse up f60000 wave shift
+log shift drag range
+key cmd+b
+log blade at range edges
+key opt+x
+
+# Cmd click builds a multi selection; Delete ripples, Forward Delete leaves a gap.
+mouse click f10000 wave
+mouse click f150000 wave cmd
+log cmd click multi select
+key delete
+log ripple delete
+key cmd+z
+log undo ripple delete
+mouse click f10000 wave
+mouse click f150000 wave cmd
+key fwddelete
+log delete leaving gap
+key cmd+z
+log undo gap delete
+
+# Duplicate, nudge, select all.
+mouse click f45000 wave
+key cmd+d
+log duplicate
+key period
+key period
+key comma
+log nudge right twice left once
+key cmd+a
+log select all
+
+# Rubber band on the empty band below the regions.
+mouse click f287000 below
+log click empty clears selection
+mouse down f5000 below
+mouse drag f40000 below
+mouse drag f70000 below
+mouse up f70000 below
+log rubber band
+
+# Blade tool cuts the clicked region only, A returns to the select tool.
+key b
+mouse move f20000 wave
+mouse click f20000 wave
+key a
+log blade tool
+
+# Shift drag on a fade handle applies to every selected region.
+key cmd+a
+mouse move f126000+5 top
+mouse down f126000+5 top shift
+mouse drag f128000 top shift
+mouse drag f130800 top shift
+mouse up f130800 top shift
+log shift fade handle all selected
+
+# Fade dialog copies the first selected region's fades to the others; double click focuses the inspector name.
+mouse click f10000 wave
+mouse click f25000 wave cmd
+key opt+cmd+f
+wait 0.5
+log fade dialog open
+sheet return
+wait 0.3
+log fade dialog applied
+mouse click f10000 wave 0 2
+wait 0.5
+log double click
+
+# Hover shows handles; snapshot.
+mouse click f150000 wave
+mouse move f150000 wave
+snapshot /tmp/tape-m3-hover.png
+
+# Undo names back to the import, one step per gesture.
+key cmd+z
+log u1
+key cmd+z
+log u2
+key cmd+z
+log u3
+key cmd+z
+log u4
+key cmd+z
+log u5
+key cmd+z
+log u6
+key cmd+z
+log u7
+key cmd+z
+log u8
+key cmd+z
+log u9
+key cmd+z
+log u10
+key cmd+z
+log u11
+key cmd+z
+log u12
+key cmd+z
+log u13
+key cmd+z
+log u14
+key cmd+z
+log u15
+key cmd+z
+log u16
+key cmd+z
+log u17
+quit

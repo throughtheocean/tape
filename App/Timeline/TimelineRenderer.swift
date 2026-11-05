@@ -268,15 +268,18 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
         let top = Float(TimelineLayout.regionTop(size.height / scale)) * s
         let bottom = Float(TimelineLayout.regionBottom(size.height / scale)) * s
         let strip = Float(TimelineLayout.nameStrip) * s
-        let body = accent.withAlphaComponent(0.16).rgba
-        let stripColor = accent.withAlphaComponent(0.42).rgba
-        let edge = accent.withAlphaComponent(0.75).rgba
+        let selection = editor.selection
         for region in doc.project.regions {
             let x0 = px(editor, frame: Double(region.position), scale: scale)
             let x1 = px(editor, frame: Double(region.end), scale: scale)
             if x1 < 0 || x0 > w { continue }
             let a = max(x0, -2), b = min(x1, w + 2)
             let width = max(b - a, 1)
+            let selected = selection.contains(region.id)
+            let body = accent.withAlphaComponent(selected ? 0.28 : 0.16).rgba
+            let stripColor = selected ? accent.blended(withFraction: 0.25, of: .white)!.withAlphaComponent(0.85).rgba
+                : accent.withAlphaComponent(0.42).rgba
+            let edge = selected ? SIMD4<Float>(1, 1, 1, 0.9) : accent.withAlphaComponent(0.75).rgba
             rects.append(RectInstance(rect: [a, top, width, bottom - top], color: body))
             rects.append(RectInstance(rect: [a, top, width, strip], color: stripColor))
             rects.append(RectInstance(rect: [a, top, width, 1], color: edge))
@@ -322,6 +325,27 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
             }
         }
 
+        buildFades(editor, size: size, scale: scale)
+
+        if let band = editor.pointer.rubberBand {
+            let x0 = px(editor, frame: Double(band.start), scale: scale)
+            let x1 = px(editor, frame: Double(band.end), scale: scale)
+            rects.append(RectInstance(rect: [x0, regionTop, max(x1 - x0, 1), regionBottom - regionTop], color: [1, 1, 1, 0.08]))
+            for r in [SIMD4<Float>(x0, regionTop, x1 - x0, s), SIMD4<Float>(x0, regionBottom - s, x1 - x0, s),
+                      SIMD4<Float>(x0, regionTop, s, regionBottom - regionTop), SIMD4<Float>(x1 - s, regionTop, s, regionBottom - regionTop)] {
+                rects.append(RectInstance(rect: r, color: [1, 1, 1, 0.6]))
+            }
+        }
+        if let frame = editor.pointer.bladeFrame {
+            let x = px(editor, frame: Double(frame), scale: scale).rounded()
+            rects.append(RectInstance(rect: [x - s / 2, regionTop, s, regionBottom - regionTop], color: [1, 0.85, 0.3, 0.95]))
+        }
+        if let edge = editor.pointer.hoverEdge, let r = project.regions.first(where: { $0.id == edge.id }) {
+            let x = px(editor, frame: Double(edge.start ? r.position : r.end), scale: scale)
+            let x0 = edge.start ? x : x - 3 * s
+            rects.append(RectInstance(rect: [x0, regionTop, 3 * s, regionBottom - regionTop], color: [1, 0.85, 0.3, 0.9]))
+        }
+
         if let range = editor.range {
             let x0 = px(editor, frame: Double(range.start), scale: scale)
             let x1 = px(editor, frame: Double(range.end), scale: scale)
@@ -358,6 +382,65 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
         let x = px(editor, frame: Double(editor.playhead), scale: scale)
         if x >= -2, x <= w + 2 {
             rects.append(RectInstance(rect: [x.rounded() - s / 2, miniH + s, max(s, 1), h - miniH], color: Theme.playhead.rgba))
+        }
+    }
+
+    // MARK: Fades
+
+    /// Fade overlays: the attenuated part above the curve shaded, the curve as a line,
+    /// and on the hovered region the corner and midpoint handles.
+    private func buildFades(_ editor: EditorController, size: CGSize, scale: CGFloat) {
+        let w = Float(size.width), s = Float(scale)
+        let height = size.height / scale
+        let top = Float(TimelineLayout.waveTop(height)) * s
+        let bottom = Float(TimelineLayout.regionBottom(height)) * s
+        let shade = SIMD4<Float>(0, 0, 0, 0.42)
+        let curve = SIMD4<Float>(1, 1, 1, 0.85)
+        let lineParams = SIMD4<Float>(0.75 * s, 0, 0, 0)
+        let step: Float = 2 * s
+
+        for region in editor.project.regions {
+            let x0 = px(editor, frame: Double(region.position), scale: scale)
+            let x1 = px(editor, frame: Double(region.end), scale: scale)
+            if x1 < 0 || x0 > w { continue }
+            for (fade, isIn) in [(region.fadeIn, true), (region.fadeOut, false)] where fade.length > 0 {
+                let a = isIn ? x0 : px(editor, frame: Double(region.end - fade.length), scale: scale)
+                let b = isIn ? px(editor, frame: Double(region.position + fade.length), scale: scale) : x1
+                let span = b - a
+                guard span > 0.5, b >= 0, a <= w else { continue }
+                func y(_ x: Float) -> Float {
+                    let t = Double(min(max((x - a) / span, 0), 1))
+                    let g = FadeCurves.value(fade, at: isIn ? t : 1 - t)
+                    return top + (1 - g) * (bottom - top)
+                }
+                var x = max(a, -step)
+                let end = min(b, w + step)
+                var prev = SIMD2<Float>(x, y(x))
+                while x < end {
+                    let nx = min(x + step, b)
+                    let ny = y(nx)
+                    let colTop = top, colBottom = min(prev.y, ny)
+                    if colBottom > colTop { rects.append(RectInstance(rect: [x, colTop, nx - x, colBottom - colTop], color: shade)) }
+                    lines.append(LineInstance(points: [prev.x, prev.y, nx, ny], color: curve, params: lineParams))
+                    prev = SIMD2(nx, ny)
+                    x = nx
+                }
+            }
+        }
+
+        // Handles on the hovered region, or on the region being dragged.
+        guard let id = editor.pointer.hoverRegion, let region = editor.project.regions.first(where: { $0.id == id }) else { return }
+        let handles = FadeHandles(region, editor: editor, height: height)
+        let size = Float(TimelineLayout.handleSize) * s
+        for corner in [handles.inCorner, handles.outCorner] {
+            let cx = Float(corner.x) * s, cy = Float(corner.y) * s
+            rects.append(RectInstance(rect: [cx - size / 2 - s, cy - size / 2 - s, size + 2 * s, size + 2 * s], color: [0, 0, 0, 0.7]))
+            rects.append(RectInstance(rect: [cx - size / 2, cy - size / 2, size, size], color: [1, 1, 1, 0.95]))
+        }
+        for mid in [handles.inMid, handles.outMid].compactMap({ $0 }) {
+            let p = SIMD2<Float>(Float(mid.x) * s, Float(mid.y) * s)
+            lines.append(LineInstance(points: [p.x, p.y, p.x, p.y], color: [0, 0, 0, 0.7], params: [4.5 * s, 1, 0, 0]))
+            lines.append(LineInstance(points: [p.x, p.y, p.x, p.y], color: [1, 1, 1, 0.95], params: [3.5 * s, 1, 0, 0]))
         }
     }
 

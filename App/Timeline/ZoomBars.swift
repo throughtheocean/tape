@@ -142,14 +142,64 @@ final class SnapToZeroButton: NSView {
     }
 }
 
-/// Strip under the minimap: snap toggle and horizontal zoom, right aligned.
+/// Toggle for the blade tool, drawn as scissors.
+@MainActor
+final class BladeToolButton: NSView {
+    var isOn: () -> Bool = { false }
+    var toggle: () -> Void = {}
+    private var drawnState: Bool?
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        toolTip = "Blade tool (B). Click a region to cut it. A returns to the select tool."
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var isFlipped: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    func refreshIfChanged() {
+        if drawnState != isOn() { needsDisplay = true }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let on = isOn()
+        drawnState = on
+        let box = bounds.insetBy(dx: 1, dy: 2)
+        (on ? Theme.accent.withAlphaComponent(0.22) : NSColor(white: 1, alpha: 0.06)).setFill()
+        NSBezierPath(roundedRect: box, xRadius: 4, yRadius: 4).fill()
+        let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .medium)
+        guard let symbol = NSImage(systemSymbolName: "scissors", accessibilityDescription: "Blade tool")?
+            .withSymbolConfiguration(config) else { return }
+        let color = on ? Theme.accent : Theme.secondaryText
+        let tinted = NSImage(size: symbol.size, flipped: false) { rect in
+            symbol.draw(in: rect)
+            color.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+        tinted.draw(in: NSRect(x: box.midX - symbol.size.width / 2, y: box.midY - symbol.size.height / 2,
+                               width: symbol.size.width, height: symbol.size.height))
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        toggle()
+        needsDisplay = true
+    }
+}
+
+/// Strip under the minimap: blade tool, snap toggle and horizontal zoom, right aligned.
 @MainActor
 final class TimelineToolStrip: NSView {
+    let blade = BladeToolButton(frame: .zero)
     let snap = SnapToZeroButton(frame: .zero)
     let zoomBar = ZoomBarView(vertical: false, toolTip: "Horizontal zoom (Option scroll, Command scroll, pinch). Double click to fit.")
 
     override init(frame: NSRect) {
         super.init(frame: frame)
+        addSubview(blade)
         addSubview(snap)
         addSubview(zoomBar)
     }
@@ -164,6 +214,7 @@ final class TimelineToolStrip: NSView {
         let barWidth: CGFloat = min(220, max(80, bounds.width * 0.3))
         zoomBar.frame = NSRect(x: bounds.width - barWidth - 4, y: 0, width: barWidth, height: bounds.height - 1)
         snap.frame = NSRect(x: zoomBar.frame.minX - 34, y: 0, width: 30, height: bounds.height - 1)
+        blade.frame = NSRect(x: snap.frame.minX - 32, y: 0, width: 30, height: bounds.height - 1)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -174,6 +225,7 @@ final class TimelineToolStrip: NSView {
     }
 
     func refresh() {
+        blade.refreshIfChanged()
         snap.refreshIfChanged()
         zoomBar.refreshIfChanged()
     }

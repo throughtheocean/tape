@@ -97,6 +97,8 @@ final class SelfTest {
             dump(c, label: args.joined(separator: " "))
         case "set":
             setting(args)
+        case "sheet":
+            sheet(args.first ?? "return", controller: c)
         case "quit":
             flushLog()
             NSApp.terminate(nil)
@@ -125,20 +127,36 @@ final class SelfTest {
         Int64(token.hasPrefix("f") ? Double(token.dropFirst()) ?? 0 : editor.frame(forX: Double(token) ?? 0))
     }
 
+    /// `f<frame>` may carry an offset in points, for example `f216000+5`.
     private func x(_ token: String, _ editor: EditorController) -> CGFloat {
-        token.hasPrefix("f") ? CGFloat(editor.x(forFrame: Double(token.dropFirst()) ?? 0)) : CGFloat(Double(token) ?? 0)
+        guard token.hasPrefix("f") else { return CGFloat(Double(token) ?? 0) }
+        var body = token.dropFirst()
+        var offset = 0.0
+        if let i = body.dropFirst().firstIndex(where: { $0 == "+" || $0 == "-" }) {
+            offset = Double(body[i...]) ?? 0
+            body = body[..<i]
+        }
+        return CGFloat(editor.x(forFrame: Double(body) ?? 0) + offset)
     }
 
     /// `y` is points from the top of the track view, or a name: top (fade handle row), strip (region name),
     /// wave (middle of the waveform), minimap.
+    /// A name may carry an offset in points, for example `wave-40`.
     private func y(_ token: String, _ view: NSView) -> CGFloat {
         let top = TimelineLayout.regionTop(view.bounds.height)
         let bottom = TimelineLayout.regionBottom(view.bounds.height)
-        switch token {
-        case "top": return top + 3
-        case "strip": return top + TimelineLayout.nameStrip / 2
-        case "wave": return (top + TimelineLayout.nameStrip + bottom) / 2
-        case "minimap": return TimelineLayout.minimapHeight / 2
+        var name = token
+        var offset: CGFloat = 0
+        if let i = token.dropFirst().firstIndex(where: { $0 == "+" || $0 == "-" }) {
+            name = String(token[..<i])
+            offset = CGFloat(Double(token[i...]) ?? 0)
+        }
+        switch name {
+        case "top": return TimelineLayout.waveTop(view.bounds.height) + offset
+        case "strip": return top + TimelineLayout.nameStrip / 2 + offset
+        case "wave": return (top + TimelineLayout.nameStrip + bottom) / 2 + offset
+        case "below": return bottom + 4 + offset
+        case "minimap": return TimelineLayout.minimapHeight / 2 + offset
         default: return CGFloat(Double(token) ?? 0)
         }
     }
@@ -220,6 +238,24 @@ final class SelfTest {
         }
     }
 
+    /// Presses Return or Escape in the attached sheet, or reports that none is open.
+    private func sheet(_ key: String, controller: MainWindowController) {
+        guard let sheet = controller.window?.attachedSheet else {
+            write("no sheet")
+            return
+        }
+        let chars = key == "escape" ? "\u{1b}" : "\r"
+        let code: UInt16 = key == "escape" ? 53 : 36
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            if let e = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                        windowNumber: sheet.windowNumber, context: nil, characters: chars,
+                                        charactersIgnoringModifiers: chars, isARepeat: false, keyCode: code) {
+                sheet.sendEvent(e)
+            }
+        }
+        write("sheet \(key) sent, sheet open \(controller.window?.attachedSheet != nil)")
+    }
+
     // MARK: Mouse
 
     private func mouse(_ args: [String], controller: MainWindowController) {
@@ -257,6 +293,8 @@ final class SelfTest {
         let rec = RecordController.shared
         s += " input \(rec.device?.name ?? "none") needsPermission \(rec.needsPermission) recording \(rec.isRecording)"
         if let err = rec.inputError { s += " inputError '\(err)'" }
+        s += " tool \(e.tool) sheet \(c.window?.attachedSheet != nil)"
+        if let responder = c.window?.firstResponder { s += " focus \(type(of: responder))" }
         write(s)
         for (i, r) in d.project.regions.enumerated() {
             let sel = e.selection.contains(r.id) ? "*" : " "

@@ -75,6 +75,21 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(recordSnapAfterRegion, forKey: "recordSnapAfterRegion") }
     }
 
+    // MARK: Edit settings
+
+    static let defaultFadeChoices: [Double] = [2, 5, 10, 20, 50, 100, 250, 500]
+    static let nudgeChoices: [Double] = [1, 10, 100]
+
+    /// Length the F key gives both ends of the selected regions, in ms.
+    @Published var defaultFadeMs: Double {
+        didSet { defaults.set(defaultFadeMs, forKey: "defaultFadeMs") }
+    }
+
+    /// Step of the , and . keys, in ms.
+    @Published var nudgeMs: Double {
+        didSet { defaults.set(nudgeMs, forKey: "nudgeMs") }
+    }
+
     var inspectorWidth: Double {
         get { (defaults.object(forKey: "inspectorWidth") as? Double) ?? 280 }
         set { defaults.set(newValue, forKey: "inspectorWidth") }
@@ -102,5 +117,7 @@ final class AppSettings: ObservableObject {
         recordSampleFormat = SampleFormat(rawValue: defaults.string(forKey: "recordSampleFormat") ?? "") ?? .int24
         preRollSeconds = defaults.object(forKey: "preRollSeconds") as? Double ?? 10
         recordSnapAfterRegion = defaults.object(forKey: "recordSnapAfterRegion") as? Bool ?? false
+        defaultFadeMs = defaults.object(forKey: "defaultFadeMs") as? Double ?? 10
+        nudgeMs = defaults.object(forKey: "nudgeMs") as? Double ?? 10
     }
 }

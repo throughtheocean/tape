@@ -228,3 +228,104 @@ The clap test with a real clap, the meters against a real signal, and the record
 6. Placement when the playhead is inside a region: by default the recording goes to the document end. The "snap-after option" from the spec is the inspector toggle that places it right after that region instead.
 7. The region starts at the placement point, and the live part follows the pre-roll. The other reading, putting the R point at the playhead, would give negative positions near the start of the document.
 8. When the device has more than two channels, the tap uses a discrete channel layout. `AVAudioFormat(standardFormatWithSampleRate:channels:)` returns nil above two channels, and after a device change only the input side format of the input node is current.
+
+## M3: Edit
+
+### What was built
+
+TapeCore (`Edit/EditOperations.swift`): pure edits on the project model, each wrapped by the app in one undo step.
+
+- Blade at any set of frames, for all regions or only some. The left part keeps the fade in, the right part keeps the fade out.
+- Delete with ripple: closes the timeline span the deleted regions covered, except where remaining regions still cover it. Delete leaving a gap.
+- Duplicate: copies the selection right after its own span. Later regions move right by the span, so nothing is covered.
+- Move, limited at frame 0. Trim start and trim end, limited by the source and a minimum length of 16 frames. Fades shrink to fit.
+- Fade length (fade in plus fade out never exceed the region), fade shape as one continuous value (0 linear, 1 S, 2 log, 3 exp, fractions blend to the next), default fades, gain, rename.
+- Snap helpers: region edges plus extra targets (the playhead), nearest within a tolerance.
+
+Tape.app:
+
+- Mouse:
+  - Click selects a region and moves the playhead to the click. Drag moves the selection.
+  - Cmd click adds to or removes from the selection. A drag on empty track draws a rubber band (Cmd adds to the selection). A click on empty track clears the selection.
+  - Shift click and Shift drag mark a range, snapped to zero crossings unless Cmd is held. With a range already set, Shift click extends it.
+- Trim: within 5 points of a region edge the cursor becomes a trim cursor and the edge highlights. On a shared edge, the side the pointer is on decides which region trims.
+- Snapping, for trims and moves:
+  - Region edges and the playhead within 8 points.
+  - Otherwise, for trims, the nearest zero crossing of the region's own source within 4 points, unless Cmd is held. The N button and key turn zero crossing snapping off.
+- Fade handles (Resolve style):
+  - On the hovered region, a square at each top corner. Drag inward to set the fade length.
+  - A dot on the curve midpoint. Option drag changes the shape continuously through linear, S, log and exp.
+  - Shift drag on a handle applies to every selected region.
+  - A small label next to the pointer shows the fade length, the shape and blend, the move offset or the trimmed length while dragging.
+  - Fades change live while dragging, so they are audible during playback, and the whole drag is one undo step.
+- Fade overlays: the attenuated part above the curve is shaded, and the curve is drawn as a line. Selected regions have a brighter body and name strip and a white outline.
+- Keys (Edit menu):
+  - Cmd B: blade at the playhead, or at both range edges.
+  - Delete: ripple. Forward Delete: leaves a gap.
+  - Cmd D: duplicate. F: default fades. Option Cmd F: fade dialog. Cmd A: select all.
+  - `,` and `.`: nudge.
+  - B and A: blade tool and select tool.
+  - Cmd Z and Shift Cmd Z: undo and redo.
+- Scissor button next to the snap button: the blade tool. A click cuts only the clicked region, at the zero crossing nearest the click (Cmd turns that off). The pointer becomes scissors and a line previews the cut.
+- Fade dialog (Option Cmd F): length in ms, shape and blend per end. It opens with the first selected region's values and applies to all selected regions.
+- Inspector with a selection:
+  - Name (double click on a region opens the inspector and focuses this field), source, position, length, gain in dB.
+  - Fade in and fade out: length in ms, shape, and blend to the next shape.
+  - With several regions selected: the span, and gain and fades for all of them.
+  - Shortcuts for the selection.
+  - With nothing selected, the document and record summary as before.
+- Editing settings in the inspector: default fade length (2 to 500 ms, default 10 ms) and nudge step (1, 10 or 100 ms, default 10 ms).
+
+### Tests
+
+14 new tests, all green (53 in total, 3 opt-in skipped):
+
+- Blade:
+  - Splits with the audio aligned.
+  - The fades go to the correct sides.
+  - Blading at an edge does nothing.
+  - A bladed region renders identical to the uncut one.
+- Ripple delete, gap delete, and ripple delete that does not close a span another region still covers.
+- Duplicate placement, including pushing later regions.
+- Move limit at 0.
+- Trim start and trim end against the source limits and the minimum length.
+- Fade clamping. The continuous shape value round-trips.
+- Snap tolerance.
+- Spec acceptance: after blade, fade lengths and blended shapes, playback (engine in manual rendering mode) equals the edit list render within 1e-6 for all 20,000 frames.
+
+### Tested by hand
+
+The screen was still locked, so this was tested with the UI harness again. `scripts/selftest/m3-edit.txt` uses a 6 s stereo 220 Hz tone at `/tmp/tape-m3.wav`; a short Python snippet generates it. The script runs every key and gesture against the real window through synthesized events and checks the logged state:
+
+- Cmd B at the playhead.
+- A click selects. F gives both ends of the selected region 10 ms (480 frames).
+- Dragging the fade in handle to 0.5 s gives exactly 24,000 frames. An Option drag of 30 points on the midpoint gives a blend of 0.75.
+- A move by 24,000 frames.
+- Trimming the end to 280,000 snapped to the zero crossing at 280,036. Trimming the start towards 97,000 snapped to the neighbouring region's end at 96,000.
+- A Shift drag marked 30,000 to 60,000. Cmd B then bladed at both range edges.
+- Cmd click built a multi selection. Delete rippled (length 312,000 to 66,000). Undo restored it. Forward Delete left the gap.
+- Cmd D, then two `.` and one `,` (one 10 ms step net), then Cmd A.
+- A click on empty track cleared the selection. A rubber band from 5,000 to 70,000 selected only the region it touched.
+- The blade tool cut at 20,000, snapped to the zero crossing at 19,964. Only that region was cut.
+- With all regions selected, a Shift drag on one fade handle gave all six regions a 4,800 frame fade in.
+- The fade dialog copied the first selected region's fades onto the second.
+- A double click focused the inspector name field.
+- Undo walked back through every step to the import, one step per gesture, with the right names.
+
+The snapshots (`/tmp/tape-m3-fade.png`, `/tmp/tape-m3-hover.png`) show the selection highlight, fade curves with shading, corner and midpoint handles, and the scissor button in the tool strip.
+
+Not tested, because the screen was locked: how dragging feels at 120 Hz, the cursors, hearing a fade change while playing (the engine receives every change; the test above covers what it renders), and typing in the inspector fields.
+
+### Open
+
+- Undo does not restore the selection that existed before a delete.
+- Waveforms show the source without gain or fades; the fade overlay shows the fade.
+
+### Deviations, with reasons
+
+1. Shift click marks a range and Cmd click multi-selects, as Maik decided after M1. The spec had Shift click for multi select.
+2. A plain drag on the waveform moves the region; marking is Shift drag. The spec lists both "drag to move" and "range selection by dragging on the waveform", which conflict. Maik's Shift decision resolves this.
+3. The midpoint handle only reacts with Option held, and only appears when the fade is at least 16 points wide. Otherwise it sits on top of the trim edge on short fades and catches plain clicks.
+4. A click on a region also moves the playhead to the click (Final Cut Pro only selects). A plain click on the track was the way to move the playhead in M1, and the ruler still scrubs.
+5. The blade tool (B, A to return) and the scissor button come from Maik's request after M1. They are not in the spec's key table. The keys follow Final Cut Pro.
+6. The default fade and nudge settings are in the inspector, since the spec has no preferences window.

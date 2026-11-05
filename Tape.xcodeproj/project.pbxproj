@@ -10,15 +10,18 @@
 		05953DA9D39E7850470BF191 /* TimelineRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C6E5C15D1404550C948BCF5 /* TimelineRenderer.swift */; };
 		087C428D740D2D6B23807D13 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E43A217D488DF323AA0EEEA3 /* AppDelegate.swift */; };
 		0D502DC3A44796A2A0B80B2F /* TransportPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86A48630D1CC175D2F2B4E6D /* TransportPanel.swift */; };
+		192037F86A06C366D92C4FF0 /* EditorController+Edit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 097E061F1D5376DA631D28B4 /* EditorController+Edit.swift */; };
 		21739973EDA4B80B89A8C9F5 /* RecordController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FDAF8C4D9AAD0F76BFB374C /* RecordController.swift */; };
 		295AA51E63C9D3F4262B3D73 /* TimeFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3837FBB61B2023113976DFF6 /* TimeFormat.swift */; };
 		297E4B5A7C85271E55869AC3 /* InspectorPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4949DA3BBA85DBD18BCB8AC4 /* InspectorPanel.swift */; };
+		2A717C0A6D59E605B6A95A5A /* TimelineInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCA1C440CBE4A34CAB9F6C44 /* TimelineInteraction.swift */; };
 		322B1BB7B723FB52F7E89611 /* MainMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EB62817DE4B97642623DF54 /* MainMenu.swift */; };
 		34A852E77964DEDE6F829DA6 /* Shaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = 7CB692CA19EE450EA90C3C42 /* Shaders.metal */; };
 		3A2ACFB2EC93C2C2FE13E4E7 /* RecordRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0EAA73E0D4806827A756D0 /* RecordRow.swift */; };
 		6A28821FA87E29E334D3957E /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314F43268D44A239651F929E /* TimelineView.swift */; };
 		76A2D1DC7ED95AD0A9CFDE84 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0B97B8EB63527C26C8D04B /* main.swift */; };
 		867C8C3C8F2071481D9F7894 /* ZoomBars.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A45754EF627C1A421E4EA2 /* ZoomBars.swift */; };
+		882AE7F859184C1CF43830C2 /* FadeDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBA048A20C51244AA1C1FB0A /* FadeDialog.swift */; };
 		9B95D4A36B544DA2DDEFCD0B /* SelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C32BD636D5C7DA0595E10C3F /* SelfTest.swift */; };
 		A87396E038103BA1495C40A3 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48E068AC01D2C3FDC47FE76D /* Theme.swift */; };
 		BA879C266495C130A230355A /* EditorController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E4C33FC83E2C6915F8C1C3F /* EditorController.swift */; };
@@ -26,10 +29,12 @@
 		E720119E65817EF107EA1B0F /* TapeDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = C706A94B2DCF35FA4AF1CD20 /* TapeDocument.swift */; };
 		F5FA68136B342E6D25633B48 /* MainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD71093FAD9D8D8AF8651895 /* MainWindowController.swift */; };
 		F75879D83194554262292096 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A973D8F2201B19458E321BDB /* AppSettings.swift */; };
+		F7CEBBFF57F50815FDD3D38F /* RegionInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB81A6302F5CC78B60F90F2E /* RegionInspector.swift */; };
 		F900097B1A73E9B82EC29D95 /* TapeCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7F00CDFB6F11376B32650AE9 /* TapeCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		097E061F1D5376DA631D28B4 /* EditorController+Edit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EditorController+Edit.swift"; sourceTree = "<group>"; };
 		1B0EAA73E0D4806827A756D0 /* RecordRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordRow.swift; sourceTree = "<group>"; };
 		209DCECA2D72E3B6C0D601A7 /* TapeCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = TapeCore; path = TapeCore; sourceTree = SOURCE_ROOT; };
 		314F43268D44A239651F929E /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
@@ -47,12 +52,15 @@
 		8584A24172F167D789D40B89 /* Tape.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Tape.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		86A48630D1CC175D2F2B4E6D /* TransportPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportPanel.swift; sourceTree = "<group>"; };
 		A973D8F2201B19458E321BDB /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		AB81A6302F5CC78B60F90F2E /* RegionInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionInspector.swift; sourceTree = "<group>"; };
 		B6E6CC35575F8BC4EA331E2F /* Benchmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Benchmark.swift; sourceTree = "<group>"; };
 		C32BD636D5C7DA0595E10C3F /* SelfTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelfTest.swift; sourceTree = "<group>"; };
 		C3A45754EF627C1A421E4EA2 /* ZoomBars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomBars.swift; sourceTree = "<group>"; };
 		C706A94B2DCF35FA4AF1CD20 /* TapeDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapeDocument.swift; sourceTree = "<group>"; };
 		DD71093FAD9D8D8AF8651895 /* MainWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowController.swift; sourceTree = "<group>"; };
 		E43A217D488DF323AA0EEEA3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		EBA048A20C51244AA1C1FB0A /* FadeDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FadeDialog.swift; sourceTree = "<group>"; };
+		FCA1C440CBE4A34CAB9F6C44 /* TimelineInteraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineInteraction.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -108,6 +116,7 @@
 			isa = PBXGroup;
 			children = (
 				6E4C33FC83E2C6915F8C1C3F /* EditorController.swift */,
+				097E061F1D5376DA631D28B4 /* EditorController+Edit.swift */,
 				DD71093FAD9D8D8AF8651895 /* MainWindowController.swift */,
 			);
 			path = Editor;
@@ -116,7 +125,9 @@
 		C9FE7E77B612BC54C60EE31D /* Panels */ = {
 			isa = PBXGroup;
 			children = (
+				EBA048A20C51244AA1C1FB0A /* FadeDialog.swift */,
 				4949DA3BBA85DBD18BCB8AC4 /* InspectorPanel.swift */,
+				AB81A6302F5CC78B60F90F2E /* RegionInspector.swift */,
 				86A48630D1CC175D2F2B4E6D /* TransportPanel.swift */,
 			);
 			path = Panels;
@@ -153,6 +164,7 @@
 			isa = PBXGroup;
 			children = (
 				7CB692CA19EE450EA90C3C42 /* Shaders.metal */,
+				FCA1C440CBE4A34CAB9F6C44 /* TimelineInteraction.swift */,
 				6C6E5C15D1404550C948BCF5 /* TimelineRenderer.swift */,
 				314F43268D44A239651F929E /* TimelineView.swift */,
 				C3A45754EF627C1A421E4EA2 /* ZoomBars.swift */,
@@ -235,17 +247,21 @@
 				087C428D740D2D6B23807D13 /* AppDelegate.swift in Sources */,
 				F75879D83194554262292096 /* AppSettings.swift in Sources */,
 				DB1E6DCCF78F6DBE5B09A6EF /* Benchmark.swift in Sources */,
+				192037F86A06C366D92C4FF0 /* EditorController+Edit.swift in Sources */,
 				BA879C266495C130A230355A /* EditorController.swift in Sources */,
+				882AE7F859184C1CF43830C2 /* FadeDialog.swift in Sources */,
 				297E4B5A7C85271E55869AC3 /* InspectorPanel.swift in Sources */,
 				322B1BB7B723FB52F7E89611 /* MainMenu.swift in Sources */,
 				F5FA68136B342E6D25633B48 /* MainWindowController.swift in Sources */,
 				21739973EDA4B80B89A8C9F5 /* RecordController.swift in Sources */,
 				3A2ACFB2EC93C2C2FE13E4E7 /* RecordRow.swift in Sources */,
+				F7CEBBFF57F50815FDD3D38F /* RegionInspector.swift in Sources */,
 				9B95D4A36B544DA2DDEFCD0B /* SelfTest.swift in Sources */,
 				34A852E77964DEDE6F829DA6 /* Shaders.metal in Sources */,
 				E720119E65817EF107EA1B0F /* TapeDocument.swift in Sources */,
 				A87396E038103BA1495C40A3 /* Theme.swift in Sources */,
 				295AA51E63C9D3F4262B3D73 /* TimeFormat.swift in Sources */,
+				2A717C0A6D59E605B6A95A5A /* TimelineInteraction.swift in Sources */,
 				05953DA9D39E7850470BF191 /* TimelineRenderer.swift in Sources */,
 				6A28821FA87E29E334D3957E /* TimelineView.swift in Sources */,
 				0D502DC3A44796A2A0B80B2F /* TransportPanel.swift in Sources */,

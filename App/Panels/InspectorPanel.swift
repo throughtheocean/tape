@@ -10,6 +10,66 @@ struct InspectorPanel: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                let selected = document.project.regions.filter { editor.selection.contains($0.id) }
+                if selected.isEmpty {
+                    documentSections
+                } else {
+                    RegionInspector(editor: editor, regions: selected, format: format)
+                    if let range = editor.range { rangeSection(range) }
+                }
+                EditSettings()
+                section("Shortcuts") {
+                    if selected.isEmpty { generalShortcuts } else { regionShortcuts }
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .background(Color.tapeChrome)
+    }
+
+    @ViewBuilder private var regionShortcuts: some View {
+        shortcut("Command B", "Blade at playhead or range edges")
+        shortcut("Delete", "Delete, ripple left")
+        shortcut("Fwd Delete", "Delete, leave gap")
+        shortcut("Command D", "Duplicate after selection")
+        shortcut("F", "Default fades")
+        shortcut("Opt Cmd F", "Fade dialog")
+        shortcut(",  .", "Nudge left, right")
+        shortcut("Command click", "Add or remove from selection")
+        shortcut("Shift drag", "Fade handle: all selected")
+        shortcut("Option drag", "Fade midpoint: shape")
+        shortcut("Command drag", "No zero crossing snap")
+        shortcut("Command Z", "Undo")
+    }
+
+    @ViewBuilder private var generalShortcuts: some View {
+        shortcut("Space", "Play / Pause")
+        shortcut("J  K  L", "Shuttle back, stop, forward")
+        shortcut("I  O", "Range in, out")
+        shortcut("Shift drag", "Mark a range")
+        shortcut("Option X", "Clear range")
+        shortcut("Command L", "Loop playback")
+        shortcut("Command A", "Select all regions")
+        shortcut("B  A", "Blade tool, select tool")
+        shortcut("Shift Z", "Fit all")
+        shortcut("Option scroll", "Zoom horizontally")
+        shortcut("Option Shift scroll", "Zoom vertically")
+        shortcut("N", "Snap to zero crossing")
+        shortcut("Home  End", "Start, end")
+        shortcut("Command I", "Import audio")
+        shortcut("R", "Record, R or Space stops")
+    }
+
+    private func rangeSection(_ range: SampleRange) -> some View {
+        section("Range") {
+            row("In", format.string(range.start))
+            row("Out", format.string(range.end))
+            row("Length", format.string(range.length))
+        }
+    }
+
+    @ViewBuilder private var documentSections: some View {
                 section("Document") {
                     row("Name", document.displayName)
                     row("Session rate", document.project.sessionRate.map { String(format: "%g Hz", $0) } ?? "None")
@@ -30,32 +90,7 @@ struct InspectorPanel: View {
                     }
                 }
                 RecordSummary()
-                if let range = editor.range {
-                    section("Range") {
-                        row("In", format.string(range.start))
-                        row("Out", format.string(range.end))
-                        row("Length", format.string(range.length))
-                    }
-                }
-                section("Shortcuts") {
-                    shortcut("Space", "Play / Pause")
-                    shortcut("J  K  L", "Shuttle back, stop, forward")
-                    shortcut("I  O", "Range in, out")
-                    shortcut("Option X", "Clear range")
-                    shortcut("Command L", "Loop playback")
-                    shortcut("Shift Z", "Fit all")
-                    shortcut("Option scroll", "Zoom horizontally")
-                    shortcut("Option Shift scroll", "Zoom vertically")
-                    shortcut("N", "Snap to zero crossing")
-                    shortcut("Home  End", "Start, end")
-                    shortcut("Command I", "Import audio")
-                    shortcut("R", "Record, R or Space stops")
-                }
-            }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .background(Color.tapeChrome)
+                if let range = editor.range { rangeSection(range) }
     }
 
     private var format: TimeFormat {
@@ -74,7 +109,7 @@ struct InspectorPanel: View {
         return parts.joined(separator: ", ")
     }
 
-    private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+    func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title.uppercased())
                 .font(.system(size: 10, weight: .semibold))

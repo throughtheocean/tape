@@ -37,6 +37,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         editor.$errorMessage.compactMap { $0 }.sink { [weak self] message in
             self?.showError(message)
         }.store(in: &subscriptions)
+        editor.focusRegionName.sink { [weak self] in self?.revealInspector() }.store(in: &subscriptions)
         tapeDocument.objectWillChange.sink { [weak self] in
             DispatchQueue.main.async { self?.updateTitle() }
         }.store(in: &subscriptions)
@@ -255,6 +256,44 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
 
     @objc func toggleRecord(_ sender: Any?) { RecordController.shared.toggleRecord(editor: editor) }
 
+    // MARK: Edit actions
+
+    override func selectAll(_ sender: Any?) { editor.selectAll() }
+    @objc func bladeRegions(_ sender: Any?) { editor.blade() }
+    @objc func deleteRegions(_ sender: Any?) { editor.deleteSelection(ripple: true) }
+    @objc func deleteRegionsLeavingGap(_ sender: Any?) { editor.deleteSelection(ripple: false) }
+    @objc func duplicateRegions(_ sender: Any?) { editor.duplicateSelection() }
+    @objc func applyDefaultFades(_ sender: Any?) { editor.applyDefaultFades() }
+    @objc func nudgeLeft(_ sender: Any?) { editor.nudge(-1) }
+    @objc func nudgeRight(_ sender: Any?) { editor.nudge(1) }
+    @objc func selectTool(_ sender: Any?) { editor.tool = .select }
+    @objc func bladeTool(_ sender: Any?) { editor.tool = .blade }
+
+    private var fadeSheet: NSWindow?
+
+    @objc func showFadeDialog(_ sender: Any?) {
+        guard let window, fadeSheet == nil, let first = editor.selectedRegions.first else { return }
+        let count = editor.selectedRegions.count
+        let dialog = FadeDialog(sessionRate: editor.sessionRate, fadeIn: first.fadeIn, fadeOut: first.fadeOut, regionCount: count) {
+            [weak self] result in
+            guard let self, let sheet = self.fadeSheet else { return }
+            if let result { self.editor.setFades(fadeIn: result.0, fadeOut: result.1) }
+            window.endSheet(sheet)
+            self.fadeSheet = nil
+        }
+        let sheet = NSWindow(contentViewController: NSHostingController(rootView: dialog))
+        sheet.appearance = NSAppearance(named: .darkAqua)
+        fadeSheet = sheet
+        window.beginSheet(sheet)
+    }
+
+    /// Shows the inspector if hidden, for double click on a region.
+    func revealInspector() {
+        guard let inspector = topSplit.arrangedSubviews.last,
+              inspector.isHidden || topSplit.isSubviewCollapsed(inspector) else { return }
+        toggleInspector(nil)
+    }
+
     @objc func toggleSnapToZero(_ sender: Any?) {
         AppSettings.shared.snapToZeroCrossing.toggle()
         editor.needsDisplay?()
@@ -295,6 +334,17 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             return true
         case #selector(clearRange(_:)):
             return editor.range != nil
+        case #selector(deleteRegions(_:)), #selector(deleteRegionsLeavingGap(_:)), #selector(duplicateRegions(_:)),
+             #selector(applyDefaultFades(_:)), #selector(showFadeDialog(_:)), #selector(nudgeLeft(_:)), #selector(nudgeRight(_:)):
+            return !editor.selectedIDs.isEmpty
+        case #selector(bladeRegions(_:)), #selector(selectAll(_:)):
+            return !tapeDocument.project.regions.isEmpty
+        case #selector(selectTool(_:)):
+            item.state = editor.tool == .select ? .on : .off
+            return true
+        case #selector(bladeTool(_:)):
+            item.state = editor.tool == .blade ? .on : .off
+            return true
         default:
             return true
         }
