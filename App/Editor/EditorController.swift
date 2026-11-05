@@ -38,7 +38,13 @@ final class EditorController: ObservableObject {
     @Published private(set) var isPlaying = false
     @Published private(set) var speed = 1
     @Published var errorMessage: String?
+    /// Selected region ids.
+    @Published var selection: Set<UUID> = []
     private(set) var playhead: Int64
+    /// Timeline span of the recording in progress, drawn as a growing block.
+    var recordingSpan: SampleRange? {
+        didSet { if oldValue != recordingSpan { needsDisplay?() } }
+    }
 
     static let minSamplesPerPoint = 1.0 / 32
     private var subscriptions: Set<AnyCancellable> = []
@@ -153,6 +159,11 @@ final class EditorController: ObservableObject {
     var lastStartLatencyMs: Double? { playback.lastStartLatencyMs }
 
     func togglePlay() {
+        let recorder = RecordController.shared
+        if recorder.isRecording {
+            recorder.stopRecording()
+            return
+        }
         if isPlaying {
             stopPlayback(at: playback.position)
         } else {

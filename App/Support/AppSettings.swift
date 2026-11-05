@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import TapeCore
 
 enum TimeDisplay: String, CaseIterable, Identifiable {
     case timecode, milliseconds, samples
@@ -43,6 +44,37 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(snapToZeroCrossing, forKey: "snapToZeroCrossing") }
     }
 
+    // MARK: Record settings
+
+    /// UID of the chosen input device; empty means no input.
+    @Published var recordDeviceUID: String? {
+        didSet { defaults.set(recordDeviceUID, forKey: "recordDeviceUID") }
+    }
+
+    /// Zero based device channels, one or two.
+    @Published var recordChannels: [Int] {
+        didSet { defaults.set(recordChannels, forKey: "recordChannels") }
+    }
+
+    @Published var recordContainer: AudioContainer {
+        didSet { defaults.set(recordContainer.rawValue, forKey: "recordContainer") }
+    }
+
+    @Published var recordSampleFormat: SampleFormat {
+        didSet { defaults.set(recordSampleFormat.rawValue, forKey: "recordSampleFormat") }
+    }
+
+    /// 0 to 60 seconds.
+    @Published var preRollSeconds: Double {
+        didSet { defaults.set(preRollSeconds, forKey: "preRollSeconds") }
+    }
+
+    /// When the playhead is inside a region at R: place the recording right after that region
+    /// instead of at the end of the document.
+    @Published var recordSnapAfterRegion: Bool {
+        didSet { defaults.set(recordSnapAfterRegion, forKey: "recordSnapAfterRegion") }
+    }
+
     var inspectorWidth: Double {
         get { (defaults.object(forKey: "inspectorWidth") as? Double) ?? 280 }
         set { defaults.set(newValue, forKey: "inspectorWidth") }
@@ -64,5 +96,11 @@ final class AppSettings: ObservableObject {
         accentHex = UInt32(hex ?? 0x3B82F6)
         inspectorVisible = defaults.object(forKey: "inspectorVisible") as? Bool ?? true
         snapToZeroCrossing = defaults.object(forKey: "snapToZeroCrossing") as? Bool ?? true
+        recordDeviceUID = defaults.string(forKey: "recordDeviceUID")
+        recordChannels = (defaults.array(forKey: "recordChannels") as? [Int]) ?? [0, 1]
+        recordContainer = AudioContainer(rawValue: defaults.string(forKey: "recordContainer") ?? "") ?? .wav
+        recordSampleFormat = SampleFormat(rawValue: defaults.string(forKey: "recordSampleFormat") ?? "") ?? .int24
+        preRollSeconds = defaults.object(forKey: "preRollSeconds") as? Double ?? 10
+        recordSnapAfterRegion = defaults.object(forKey: "recordSnapAfterRegion") as? Bool ?? false
     }
 }

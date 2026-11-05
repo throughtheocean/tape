@@ -77,10 +77,7 @@ public final class PlaybackEngine: @unchecked Sendable {
         self.channelCount = max(1, channelCount)
         let ring = ChunkRing(slotCount: Self.slotCount, chunkFrames: Self.chunkFrames, channelCount: self.channelCount)
         self.ring = ring
-        guard let format = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sessionRate,
-                                         channels: AVAudioChannelCount(self.channelCount), interleaved: false) else {
-            throw TapeError.unreadable(URL(fileURLWithPath: "/"), "Unsupported session format")
-        }
+        let format = AVAudioFormat.deinterleavedFloat(sampleRate: sessionRate, channels: self.channelCount)
         let node = makeSourceNode(format: format, ring: ring)
         sourceNode = node
         isManual = manualRendering

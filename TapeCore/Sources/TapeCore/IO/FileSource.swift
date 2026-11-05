@@ -5,12 +5,14 @@ public enum TapeError: Error, LocalizedError {
     case unreadable(URL, String)
     case invalidPeakFile(URL)
     case cancelled
+    case failed(String)
 
     public var errorDescription: String? {
         switch self {
         case let .unreadable(url, why): return "Cannot read \(url.lastPathComponent): \(why)"
         case let .invalidPeakFile(url): return "Invalid peak file \(url.lastPathComponent)"
         case .cancelled: return "Cancelled"
+        case let .failed(why): return why
         }
     }
 }

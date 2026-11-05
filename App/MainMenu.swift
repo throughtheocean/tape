@@ -54,6 +54,8 @@ enum MainMenu {
         item(play, "Set Range End", #selector(MainWindowController.setRangeOut(_:)), "o", [])
         item(play, "Clear Range", #selector(MainWindowController.clearRange(_:)), "x", [.option])
         play.addItem(.separator())
+        item(play, "Record", #selector(MainWindowController.toggleRecord(_:)), "r", [])
+        play.addItem(.separator())
         item(play, "Loop Playback", #selector(MainWindowController.toggleLoop(_:)), "l")
         play.addItem(.separator())
         item(play, "Go to Beginning", #selector(MainWindowController.goToStart(_:)), key(NSHomeFunctionKey), [])

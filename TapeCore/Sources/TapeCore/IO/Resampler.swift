@@ -7,9 +7,8 @@ public enum Resampler {
                                isCancelled: @escaping @Sendable () -> Bool = { false }) throws {
         let inFile = try AVAudioFile(forReading: input)
         let inFormat = inFile.processingFormat
-        guard let outFormat = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: sampleRate,
-                                            channels: inFormat.channelCount, interleaved: false),
-              let converter = AVAudioConverter(from: inFormat, to: outFormat) else {
+        let outFormat = AVAudioFormat.deinterleavedFloat(sampleRate: sampleRate, channels: Int(inFormat.channelCount))
+        guard let converter = AVAudioConverter(from: inFormat, to: outFormat) else {
             throw TapeError.unreadable(input, "No converter for \(inFormat) to \(sampleRate) Hz")
         }
         converter.sampleRateConverterQuality = AVAudioQuality.max.rawValue

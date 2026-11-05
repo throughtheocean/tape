@@ -47,7 +47,12 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
 
     private func buildLayout() {
         guard let window else { return }
-        let transport = NSHostingView(rootView: TransportPanel(editor: editor, document: tapeDocument))
+        let transport = NSHostingView(rootView: VStack(spacing: 0) {
+            RecordRow(editor: editor)
+            Divider().overlay(Color(nsColor: Theme.separator))
+            TransportPanel(editor: editor, document: tapeDocument).frame(height: 52)
+            Spacer(minLength: 0)
+        }.background(Color.tapeChrome))
         let inspector = NSHostingView(rootView: InspectorPanel(editor: editor, document: tapeDocument))
         transport.sizingOptions = []
         inspector.sizingOptions = []
@@ -162,6 +167,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     private var discardOnClose = false
 
     func windowWillClose(_ notification: Notification) {
+        RecordController.shared.editorClosing(editor)
         editor.playback.shutdown()
         tapeDocument.flushSaves()
         if tapeDocument.isUntitled, tapeDocument.isEmpty || discardOnClose { tapeDocument.deletePackage() }
@@ -247,6 +253,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     @objc func zoomInTimeline(_ sender: Any?) { editor.zoomAroundPlayhead(by: 0.5) }
     @objc func zoomOutTimeline(_ sender: Any?) { editor.zoomAroundPlayhead(by: 2) }
 
+    @objc func toggleRecord(_ sender: Any?) { RecordController.shared.toggleRecord(editor: editor) }
+
     @objc func toggleSnapToZero(_ sender: Any?) {
         AppSettings.shared.snapToZeroCrossing.toggle()
         editor.needsDisplay?()
@@ -267,8 +275,15 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         if editingText, item.keyEquivalentModifierMask.isEmpty || item.keyEquivalentModifierMask == .shift { return false }
         switch item.action {
         case #selector(togglePlay(_:)):
+            if RecordController.shared.isRecording {
+                item.title = "Stop Recording"
+                return true
+            }
             item.title = editor.isPlaying ? "Pause" : "Play"
             return tapeDocument.project.sessionRate != nil
+        case #selector(toggleRecord(_:)):
+            item.title = RecordController.shared.isRecording ? "Stop Recording" : "Record"
+            return true
         case #selector(toggleLoop(_:)):
             item.state = editor.loopEnabled ? .on : .off
             return true

@@ -4,8 +4,9 @@ import UniformTypeIdentifiers
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var controllers: [MainWindowController] = []
+    private(set) var controllers: [MainWindowController] = []
     private var benchmark: Benchmark?
+    private var selfTest: SelfTest?
     private var launched = false
     /// Files handed over before launch finished; AppKit delivers them ahead of `applicationDidFinishLaunching`.
     private var pendingOpen: [URL] = []
@@ -20,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         // Documents open at the last quit or crash.
-        for path in AppSettings.shared.openDocuments {
+        for path in AppSettings.shared.openDocuments where !isSelfTest {
             let url = URL(fileURLWithPath: path)
             if FileManager.default.fileExists(atPath: url.appendingPathComponent("project.json").path) {
                 open(packageAt: url)
@@ -31,6 +32,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pendingOpen = []
         }
         if controllers.isEmpty { newDocument(nil) }
+        RecordController.shared.start()
+        if let script = UserDefaults.standard.string(forKey: "TapeSelfTest") {
+            selfTest = SelfTest(scriptPath: script, app: self)
+            selfTest?.run()
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
@@ -41,6 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        RecordController.shared.shutdown()
         rememberOpenDocuments()
         for c in controllers {
             c.editor.playback.shutdown()
@@ -78,7 +85,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         rememberOpenDocuments()
     }
 
+    private var isSelfTest: Bool { UserDefaults.standard.string(forKey: "TapeSelfTest") != nil }
+
     func rememberOpenDocuments() {
+        guard !isSelfTest else { return }
         AppSettings.shared.openDocuments = controllers.map { $0.tapeDocument.package.url.path }
     }
 

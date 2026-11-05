@@ -137,10 +137,36 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
     }
 
     private func render(_ view: MTKView) {
-        guard let editor, let pass = view.currentRenderPassDescriptor else { return }
+        guard let pass = view.currentRenderPassDescriptor, let drawable = view.currentDrawable else { return }
+        encode(pass: pass, size: view.drawableSize, scale: view.window?.backingScaleFactor ?? 2, drawable: drawable)
+    }
+
+    /// Renders one frame into an offscreen image, for self tests while no display is available.
+    func snapshot(size: CGSize, scale: CGFloat) -> CGImage? {
+        let w = Int(size.width), h = Int(size.height)
+        guard w > 0, h > 0 else { return nil }
+        let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: w, height: h, mipmapped: false)
+        d.usage = [.renderTarget, .shaderRead]
+        d.storageMode = .shared
+        guard let texture = device.makeTexture(descriptor: d) else { return nil }
+        let pass = MTLRenderPassDescriptor()
+        pass.colorAttachments[0].texture = texture
+        pass.colorAttachments[0].loadAction = .clear
+        pass.colorAttachments[0].storeAction = .store
+        pass.colorAttachments[0].clearColor = MTLClearColor(red: 0.059, green: 0.059, blue: 0.063, alpha: 1)
+        encode(pass: pass, size: size, scale: scale, drawable: nil)
+        var bytes = [UInt8](repeating: 0, count: w * h * 4)
+        texture.getBytes(&bytes, bytesPerRow: w * 4, from: MTLRegionMake2D(0, 0, w, h), mipmapLevel: 0)
+        let info = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData) else { return nil }
+        return CGImage(width: w, height: h, bitsPerComponent: 8, bitsPerPixel: 32, bytesPerRow: w * 4,
+                       space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: info, provider: provider,
+                       decode: nil, shouldInterpolate: false, intent: .defaultIntent)
+    }
+
+    private func encode(pass: MTLRenderPassDescriptor, size: CGSize, scale: CGFloat, drawable: CAMetalDrawable?) {
+        guard let editor else { return }
         let t0 = CACurrentMediaTime()
-        let size = view.drawableSize
-        let scale = view.window?.backingScaleFactor ?? 2
         guard size.width > 0, size.height > 0 else { return }
 
         rects.removeAll(keepingCapacity: true)
@@ -152,8 +178,7 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
         let overlayStart = rects.count
         buildOverlays(editor, size: size, scale: scale)
 
-        guard let drawable = view.currentDrawable, let cmd = queue.makeCommandBuffer(),
-              let enc = cmd.makeRenderCommandEncoder(descriptor: pass) else { return }
+        guard let cmd = queue.makeCommandBuffer(), let enc = cmd.makeRenderCommandEncoder(descriptor: pass) else { return }
         var uniforms = SIMD2<Float>(Float(size.width), Float(size.height))
         let frameRects = rects.isEmpty ? nil : device.makeBuffer(bytes: rects, length: rects.count * MemoryLayout<RectInstance>.stride)
         let frameLines = lines.isEmpty ? nil : device.makeBuffer(bytes: lines, length: lines.count * MemoryLayout<LineInstance>.stride)
@@ -188,6 +213,11 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
         drawLines(frameLines, start: 0, count: lines.count)
         enc.endEncoding()
 
+        guard let drawable else {
+            cmd.commit()
+            cmd.waitUntilCompleted()
+            return
+        }
         if let sink = timingSink {
             let cpu = (CACurrentMediaTime() - t0) * 1000
             drawable.addPresentedHandler { d in
@@ -266,6 +296,31 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
         let w = Float(size.width), h = Float(size.height), s = Float(scale)
         let top = Float(TimelineLayout.trackTop) * s
         let miniH = Float(TimelineLayout.minimapHeight) * s
+        let regionTop = Float(TimelineLayout.regionTop(size.height / scale)) * s
+        let regionBottom = Float(TimelineLayout.regionBottom(size.height / scale)) * s
+
+        // Pre-roll heads of recordings, dimmed up to the moment R was pressed.
+        let project = editor.document.project
+        if let rate = project.sessionRate {
+            for region in project.regions {
+                guard let ref = project.source(region.sourceId) else { continue }
+                let head = min(ref.sessionPreRoll(sessionRate: rate) - region.sourceIn, region.length)
+                guard head > 0 else { continue }
+                let x0 = px(editor, frame: Double(region.position), scale: scale)
+                let x1 = px(editor, frame: Double(region.position + head), scale: scale)
+                if x1 < 0 || x0 > w { continue }
+                rects.append(RectInstance(rect: [x0, regionTop, max(x1 - x0, 1), regionBottom - regionTop], color: [0, 0, 0, 0.5]))
+                rects.append(RectInstance(rect: [x1 - s / 2, regionTop, s, regionBottom - regionTop], color: [1, 0.27, 0.23, 0.9]))
+            }
+        }
+        if let span = editor.recordingSpan {
+            let x0 = px(editor, frame: Double(span.start), scale: scale)
+            let x1 = px(editor, frame: Double(span.end), scale: scale)
+            if x1 >= 0, x0 <= w {
+                rects.append(RectInstance(rect: [x0, regionTop, max(x1 - x0, 1), regionBottom - regionTop], color: [1, 0.27, 0.23, 0.22]))
+                rects.append(RectInstance(rect: [x0, regionTop, max(x1 - x0, 1), 2 * s], color: [1, 0.27, 0.23, 1]))
+            }
+        }
 
         if let range = editor.range {
             let x0 = px(editor, frame: Double(range.start), scale: scale)

@@ -14,7 +14,8 @@ settings:
     ARCHS: arm64
     ONLY_ACTIVE_ARCH: YES
     MACOSX_DEPLOYMENT_TARGET: "14.0"
-    CODE_SIGN_IDENTITY: "-"
+    # A real identity keeps the privacy (microphone) grant across rebuilds; ad-hoc signing changes it every build.
+    CODE_SIGN_IDENTITY: "Apple Development: maik.bluhm@gmail.com (NAHQFX7L3R)"
     CODE_SIGN_STYLE: Manual
     DEVELOPMENT_TEAM: ""
     ENABLE_HARDENED_RUNTIME: NO

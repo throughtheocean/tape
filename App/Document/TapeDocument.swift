@@ -142,6 +142,29 @@ final class TapeDocument: ObservableObject {
         }
     }
 
+    // MARK: Recording
+
+    /// Adds a finished recording from `sources/` as a region starting at `position`.
+    /// Returns the timeline frame where R was pressed, after the pre-roll head.
+    @discardableResult
+    func addRecording(fileName: String, result: RecordEngine.Recording, at position: Int64) -> Int64 {
+        let ref = SourceRef(name: fileName, location: .package(fileName: fileName), sampleRate: result.sampleRate,
+                            channelCount: result.channelCount, frameCount: result.frames, preRollFrames: result.preRollFrames)
+        var livePoint = position
+        apply("Record") { p in
+            if p.sessionRate == nil {
+                p.sessionRate = result.sampleRate
+                p.channelCount = result.channelCount
+            }
+            let rate = p.sessionRate!
+            p.sources.append(ref)
+            p.regions.append(Region(name: (fileName as NSString).deletingPathExtension, sourceId: ref.id, sourceIn: 0,
+                                    sourceOut: ref.sessionFrameCount(sessionRate: rate), position: position))
+            livePoint = position + ref.sessionPreRoll(sessionRate: rate)
+        }
+        return livePoint
+    }
+
     // MARK: Sources
 
     private func loadMissingSources() {

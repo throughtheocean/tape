@@ -1,0 +1,28 @@
+# M2: record with pre-roll into an empty document, then into a document with audio.
+wait 1
+log start
+set preroll 2
+wait 3
+key r
+wait 2
+log recording
+key r
+wait 1
+waitLoaded
+log after first take
+fit
+snapshot /tmp/tape-m2-take1.png
+locate f24000
+key r
+wait 1.5
+key space
+wait 1
+waitLoaded
+log after second take inside region
+fit
+snapshot /tmp/tape-m2-take2.png
+key cmd+z
+log after undo
+key cmd+shift+z
+log after redo
+quit

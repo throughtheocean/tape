@@ -107,14 +107,25 @@ public struct SourceRef: Codable, Equatable, Hashable, Identifiable, Sendable {
     public var channelCount: Int
     /// Native frame count of the file.
     public var frameCount: Int64
+    /// For recordings: native frames of pre-roll before the moment R was pressed.
+    public var preRollFrames: Int64?
 
-    public init(id: UUID = UUID(), name: String, location: Location, sampleRate: Double, channelCount: Int, frameCount: Int64) {
+    public init(id: UUID = UUID(), name: String, location: Location, sampleRate: Double, channelCount: Int, frameCount: Int64,
+                preRollFrames: Int64? = nil) {
         self.id = id
         self.name = name
         self.location = location
         self.sampleRate = sampleRate
         self.channelCount = channelCount
         self.frameCount = frameCount
+        self.preRollFrames = preRollFrames
+    }
+
+    /// Pre-roll length in session frames, 0 when the source is not a recording.
+    public func sessionPreRoll(sessionRate: Double) -> Int64 {
+        guard let preRollFrames, preRollFrames > 0 else { return 0 }
+        if sampleRate == sessionRate { return preRollFrames }
+        return Int64((Double(preRollFrames) * sessionRate / sampleRate).rounded())
     }
 
     /// Frame count once read at `sessionRate`.

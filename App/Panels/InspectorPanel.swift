@@ -29,6 +29,7 @@ struct InspectorPanel: View {
                         }
                     }
                 }
+                RecordSummary()
                 if let range = editor.range {
                     section("Range") {
                         row("In", format.string(range.start))
@@ -48,6 +49,7 @@ struct InspectorPanel: View {
                     shortcut("N", "Snap to zero crossing")
                     shortcut("Home  End", "Start, end")
                     shortcut("Command I", "Import audio")
+                    shortcut("R", "Record, R or Space stops")
                 }
             }
             .padding(14)
@@ -90,10 +92,42 @@ struct InspectorPanel: View {
         .font(.system(size: 12))
     }
 
-    private func shortcut(_ key: String, _ action: String) -> some View {
+    func shortcut(_ key: String, _ action: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(key).font(.system(size: 11, weight: .medium).monospacedDigit()).frame(width: 82, alignment: .leading)
             Text(action).font(.system(size: 11)).foregroundStyle(Color.tapeSecondary)
         }
+    }
+}
+
+/// Record settings summary for the inspector when nothing is selected.
+struct RecordSummary: View {
+    @ObservedObject var recorder = RecordController.shared
+    @ObservedObject var settings = AppSettings.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("RECORD")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Color.tapeSecondary)
+            row("Input", recorder.device?.name ?? "None")
+            row("Channels", recorder.channels.count == 2 ? "\(InputDevice.label(recorder.channels)) stereo" : "\(recorder.channels[0] + 1) mono")
+            row("Format", "\(settings.recordContainer.displayName) \(settings.recordSampleFormat.displayName)")
+            row("Rate", recorder.sampleRate > 0 ? String(format: "%g kHz (device)", recorder.sampleRate / 1000) : "Device rate")
+            row("Pre-roll", settings.preRollSeconds == 0 ? "Off" : "\(Int(settings.preRollSeconds)) s")
+            Toggle("Place after the region under the playhead", isOn: $settings.recordSnapAfterRegion)
+                .font(.system(size: 11))
+                .controlSize(.small)
+                .help("Otherwise a recording started inside a region goes to the end of the document")
+        }
+    }
+
+    private func row(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label).foregroundStyle(Color.tapeSecondary)
+            Spacer()
+            Text(value).monospacedDigit().lineLimit(1).truncationMode(.middle)
+        }
+        .font(.system(size: 12))
     }
 }
