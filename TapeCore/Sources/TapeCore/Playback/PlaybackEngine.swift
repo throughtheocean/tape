@@ -150,11 +150,37 @@ public final class PlaybackEngine: @unchecked Sendable {
         set { engine.mainMixerNode.outputVolume = newValue }
     }
 
+    private var insert: AVAudioUnit?
+
+    /// Puts an effect between the edit list and the output, for process previews; nil removes it.
+    /// The graph changes with the engine stopped, so there is a short gap in the output.
+    public func setInsert(_ unit: AVAudioUnit?) throws {
+        guard let node = sourceNode, unit !== insert else { return }
+        let format = AVAudioFormat.deinterleavedFloat(sampleRate: sessionRate, channels: channelCount)
+        engine.stop()
+        if let old = insert { engine.detach(old) }
+        insert = unit
+        engine.disconnectNodeOutput(node)
+        if let unit {
+            engine.attach(unit)
+            engine.connect(node, to: unit, format: format)
+            engine.connect(unit, to: engine.mainMixerNode, format: format)
+        } else {
+            engine.connect(node, to: engine.mainMixerNode, format: format)
+        }
+        engine.prepare()
+        try engine.start()
+    }
+
     public func shutdown() {
         stopProducer.store(1)
         wake.signal()
         producer = nil
         if engine.isRunning { engine.stop() }
+        if let unit = insert {
+            engine.detach(unit)
+            insert = nil
+        }
         if let node = sourceNode {
             engine.detach(node)
             sourceNode = nil

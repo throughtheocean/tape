@@ -1,0 +1,136 @@
+# M4: every process through the menu and the sheet, preview, undo, consolidate, clean up.
+# Source: /tmp/tape-m4.wav, 6 s stereo 24 bit 48 kHz: 0.5 s silence, 5 s 220 Hz at -20 dBFS peak plus 0.05 DC, 0.5 s silence.
+wait 1
+import /tmp/tape-m4.wav
+waitLoaded
+fit
+log imported
+measure source
+
+# Trim silence trims the region ends, nothing is rendered.
+mouse click f100000 wave
+menu Trim Silence...
+wait 0.5
+sheet return
+waitApply
+log trim silence
+
+# Remove DC on the selected region (the mean over the region, now the tone only).
+menu Remove DC Offset...
+wait 0.5
+sheet return
+waitApply
+log dc removed
+measure after remove dc
+
+# Normalize to -14 LUFS with preview first.
+menu Normalize...
+wait 0.5
+param mode 1
+param lufs -14
+preview on
+wait 1.5
+log preview running
+preview off
+sheet return
+waitApply
+log normalized
+measure after normalize -14 LUFS
+
+# Peak normalize to -1 dBFS.
+menu Normalize...
+wait 0.5
+param mode 0
+param peak -1
+sheet return
+waitApply
+measure after peak normalize -1 dBFS
+
+# Gain -6 dB on a marked range only (crossfaded edges), then clear the range.
+mouse down f96000 wave shift
+mouse drag f192000 wave shift
+mouse up f192000 wave shift
+menu Gain...
+wait 0.5
+param gain -6
+sheet return
+waitApply
+measure range after gain -6
+key opt+x
+measure whole after range gain
+
+# Reverse, then reverse again: same loudness.
+mouse click f100000 wave
+menu Reverse...
+wait 0.5
+sheet return
+waitApply
+measure after reverse
+
+# Compressor and limiter (Audio Units, offline).
+menu Compressor...
+wait 0.5
+preview on
+wait 1.5
+log compressor preview
+preview off
+sheet return
+waitApply
+measure after compressor
+menu Limiter...
+wait 0.5
+param pregain 12
+sheet return
+waitApply
+measure after limiter +12 pre gain
+
+# Resample to 44.1 kHz.
+menu Resample...
+wait 0.5
+param rate 44100
+sheet return
+waitApply
+log resampled
+measure after resample
+
+# Cancel with Escape leaves the document alone.
+menu Gain...
+wait 0.5
+sheet escape
+wait 0.3
+log escape closes sheet
+
+# Undo names back to the import.
+key cmd+z
+log u1
+key cmd+z
+log u2
+key cmd+z
+log u3
+key cmd+z
+log u4
+key cmd+z
+log u5
+key cmd+z
+log u6
+key cmd+z
+log u7
+key cmd+z
+log u8
+key cmd+z
+log u9
+measure after undo all
+menu Redo
+log redo
+
+# Consolidate copies the external import into the package; clean up removes unused sources.
+menu Consolidate
+wait 1
+log consolidated
+menu Clean Up Sources...
+wait 0.5
+sheet return
+wait 0.5
+log cleaned up
+measure after clean up
+quit

@@ -23,6 +23,30 @@ final class PerformanceTests: XCTestCase {
         XCTAssertGreaterThan(last.max, 0.01)
     }
 
+    /// Loudness analysis, a gain apply to a new CAF and an offline AU compressor over 10 minutes of 48 kHz stereo.
+    func testProcessingTimeForTenMinutes() throws {
+        guard ProcessInfo.processInfo.environment["TAPE_PERF"] == "1" else { throw XCTSkip("set TAPE_PERF=1") }
+        let rate = 48000.0, frames = 10 * 60 * 48000
+        let channels = (0..<2).map { c in
+            (0..<frames).map { i in Float(0.3 * sin(2 * Double.pi * (220 + 110 * Double(c)) * Double(i) / rate)) }
+        }
+        let source = MemorySource(samples: channels)
+        let buffer = AudioBuffer(channels: channels, sampleRate: rate)
+        func time(_ label: String, _ body: () throws -> Void) rethrows {
+            let t0 = CFAbsoluteTimeGetCurrent()
+            try body()
+            print("PERF \(label): \(String(format: "%.2f", CFAbsoluteTimeGetCurrent() - t0)) s")
+        }
+        time("integrated loudness 10 min") { _ = Loudness.integrated(buffer) }
+        time("true peak 10 min") { _ = Loudness.truePeakDB(buffer) }
+        let url = TestAudio.tempDirectory().appendingPathComponent("perf.caf")
+        try time("gain apply 10 min to CAF") {
+            _ = try ProcessApplier.render(source: source, sampleRate: rate, process: Gain(dB: -3),
+                                          range: SampleRange(start: 0, end: Int64(frames)), crossfade: false, to: url)
+        }
+        try time("AU compressor 10 min offline") { _ = try Dynamics.compressor().render(input: buffer, range: buffer.all) }
+    }
+
     /// 48 kHz stereo 24 bit WAV of a swept sine with noise, cached in /tmp.
     static func longFile(hours: Double) throws -> URL {
         let url = URL(fileURLWithPath: "/tmp/tape-perf-\(hours)h.wav")

@@ -329,3 +329,111 @@ Not tested, because the screen was locked: how dragging feels at 120 Hz, the cur
 4. A click on a region also moves the playhead to the click (Final Cut Pro only selects). A plain click on the track was the way to move the playhead in M1, and the ruler still scrubs.
 5. The blade tool (B, A to return) and the scissor button come from Maik's request after M1. They are not in the spec's key table. The keys follow Final Cut Pro.
 6. The default fade and nudge settings are in the inspector, since the spec has no preferences window.
+
+## M4: Process
+
+### What was built
+
+TapeCore (`Processing/`):
+
+- `AudioProcess` protocol and `AudioBuffer` (planar float channels plus rate). One struct per process: `Normalize`, `Gain`, `RemoveDC`, `TrimSilence`, `Reverse`, `Resample`, and `AUProcess` for Apple Audio Units (`Dynamics.compressor` hosts AUDynamicsProcessor, `Dynamics.limiter` hosts AUPeakLimiter). Any other Apple AU is one `AUProcess(name:component:parameters:)` line.
+- Loudness per ITU BS.1770-4 (`Loudness.swift`):
+  - K-weighting coefficients derived from the analog prototype for any sample rate, run with `vDSP_biquad`.
+  - 400 ms blocks with 100 ms hop (75 percent overlap), absolute gate -70 LUFS, relative gate -10 LU.
+  - True peak with 4x polyphase oversampling (Kaiser windowed sinc, 48 taps per phase) through `vDSP_conv`.
+- Normalize: peak to a target dBFS, or integrated loudness to a target LUFS with a true peak ceiling. When the loudness gain would push the true peak over the ceiling, the gain is lowered to meet the ceiling.
+- AU processes render offline through AVAudioEngine manual rendering, with the unit's latency removed from the output.
+- `ProcessApplier` writes the new source: the frames before and after the range are copied in blocks, the range is processed in memory, and partial ranges crossfade over 2 ms into the original at both edges. The output is float32 CAF in `sources/`.
+- `PlaybackEngine.setInsert` puts an Audio Unit between the source node and the mixer for live preview.
+
+Tape.app:
+
+- Process menu: Normalize, Gain, Remove DC Offset, Trim Silence, Reverse, Compressor, Limiter, Resample. Each opens a sheet with its parameters (defaults from the spec: -1.0 dBFS peak, -14.0 LUFS with -1.0 dBTP ceiling), a Preview checkbox, status, Cancel and Apply (Return).
+- Targets: with a range, every region overlapping it, processed over the range only. Otherwise every selected region, processed whole.
+- Normalize measures what the target plays (region gain and fades included). With a range it uses one gain for the whole range, so several regions keep their balance. Without one, each region gets its own gain.
+- Preview loops the target span and plays it processed:
+  - Compressor and Limiter run through the same Audio Unit inserted in the live engine. Parameter changes are heard immediately.
+  - The other processes render the span in memory into a preview edit list. It is rebuilt 0.12 s after the last parameter change.
+- Apply renders off the main thread with progress and cancel. Each touched region gets a new source, and all regions are repointed in one undo step named after the process. Undo and redo only switch the pointers back and forth.
+- Trim Silence moves the region edges inward (threshold dBFS, hold ms) and renders nothing.
+- File > Consolidate copies every imported (external) source into `sources/` as float32 CAF at its own rate and repoints the sources, as one undo step.
+- File > Clean Up Sources... lists the unused sources and the files no region uses, with their total size. After confirmation it deletes them and their peak caches, and clears undo.
+
+### Measured numbers
+
+Loudness and true peak (unit tests):
+
+| Signal | Result | Expected |
+| --- | --- | --- |
+| EBU Tech 3341 case 1 | -22.993 LUFS | -23.0 ±0.1 |
+| EBU Tech 3341 case 2 | -32.993 LUFS | -33.0 ±0.1 |
+| EBU Tech 3341 case 3 | -23.014 LUFS | -23.0 ±0.1 |
+| EBU Tech 3341 case 4 | -23.014 LUFS | -23.0 ±0.1 |
+| EBU Tech 3341 case 5 | -22.979 LUFS | -23.0 ±0.1 |
+| 997 Hz, -20 dBFS RMS, one channel, 44.1 kHz | -19.997 LUFS | -20.0 ±0.1 |
+| 997 Hz, -20 dBFS RMS, one channel, 48 kHz | -20.000 LUFS | -20.0 ±0.1 |
+| 997 Hz, -20 dBFS RMS, one channel, 96 kHz | -20.017 LUFS | -20.0 ±0.1 |
+| Inter-sample peak pattern 0.9, 0.9, -0.9, -0.9 | +2.190 dBTP | above 0 dBFS |
+| Normalize to -14 LUFS, re-analysed | -14.000 LUFS | -14.0 ±0.1 |
+
+In the app (self-test, through menu, sheet and Apply, re-analysed by rendering the edit list):
+
+- Normalize to -14 LUFS: -14.000 LUFS. Peak normalize to -1 dBFS: -1.000 dBFS.
+- Remove DC: the mean went from 0.050 to 0.00000.
+- Gain -6 dB over a marked range: the range dropped by 6.0 LU, the rest stayed.
+- Limiter with +12 dB pre-gain: exactly 12.0 LU louder than its input.
+- Resample to 44.1 kHz: loudness and peak unchanged to 0.001 dB.
+
+Speed (release build, M-series, 10 minutes of 48 kHz stereo in memory, opt-in `TAPE_PERF=1`):
+
+| Step | Time |
+| --- | --- |
+| Integrated loudness | 0.15 s |
+| True peak (4x) | 0.28 s |
+| Gain apply, written to CAF | 0.18 s |
+| AU compressor, offline | 0.55 s |
+
+### Tests
+
+16 new tests, all green (69 in total, 3 opt-in skipped). They cover:
+
+- The loudness and true peak cases above.
+- Normalize peak within 0.01 dB. Normalize loudness re-measured within 0.1 LU, and the ceiling limiting the gain.
+- Gain, Remove DC, Reverse and Trim Silence bounds.
+- The compressor reducing a loud signal. The limiter output lining up with its input (latency compensated).
+- Resample keeping duration and pitch.
+- `ProcessApplier` writing the whole source with only the range processed and crossfaded over 2 ms.
+- Silence measuring minus infinity, and the true peak of a low sine equalling its sample peak.
+
+### Tested by hand
+
+The screen was locked, so this went through the self-test harness: `scripts/selftest/m4-process.txt`. Its source is a 6 s stereo 24 bit file: 0.5 s silence, 5 s of a 220 Hz tone at -20 dBFS plus 0.05 DC, then 0.5 s silence. The script runs, through the Process menu and sheet:
+
+1. Trim Silence: the region went from 0 to 288,000 to 23,520 to 264,480, which is the tone plus the 10 ms hold on each side.
+2. Remove DC, then Normalize to -14 LUFS with Preview on (the loop played the processed span). Then Normalize peak to -1 dBFS.
+3. Gain -6 dB over a Shift marked range, then Reverse.
+4. Compressor with Preview through the live Audio Unit, then Limiter with +12 dB pre-gain, then Resample to 44.1 kHz.
+5. Escape on a sheet: the document was unchanged.
+6. Undo of all nine steps, with the right names, back to the imported file, measured identical to the source. Then Redo.
+7. Consolidate: the external file was copied into the package, as one undo step.
+8. Clean Up Sources: the alert listed 8 orphaned files. Remove deleted them and cleared undo, and the audio still measured the same.
+
+The whole script runs in 26 s.
+
+Not tested, because the screen was locked: how the sheets look and how preview sounds. The engine and render paths are covered above, but nobody listened.
+
+### Open
+
+- Processes on the new files always write float32 CAF at the session rate (Resample writes at the new rate). That is larger than a 16 or 24 bit source.
+- Clean Up Sources cannot be undone, by design. It says so in the alert.
+
+### Deviations and findings, with reasons
+
+1. `AudioProcess.render(input:range:)` has no `params:` argument. Each process is a struct whose properties are its parameters (`Gain(dB:)`, `Normalize(mode:)`), which gives the same flexibility with type safety.
+2. The test signal "997 Hz sine at -20 dBFS" is read as RMS -20 dBFS, which is what BS.1770 calibrates to -20 LUFS. A sine with a -20 dBFS peak measures -23.01 LUFS. Both are in the tests.
+3. Normalize to LUFS does not limit. If the true peak ceiling would be exceeded, the gain is reduced instead, so the result can be quieter than the target. The Limiter process is there for when loudness is more important than the ceiling.
+4. Remove DC subtracts the mean of the processed range, not a high-pass. On material where the offset changes over time, a range shorter than the whole region fixes it locally.
+5. Loudness depends on the span measured: silence next to a short signal adds partly filled 400 ms blocks that pass the relative gate. Normalize therefore measures the target region or the range, not the whole document. In the harness, a tone with 0.49 s of empty timeline in front measured 0.13 LU lower than the region on its own. Both are correct per BS.1770.
+6. Trim Silence is a region trim, so it is not destructive and needs no new file. The spec says it applies at region ends, and the source stays untouched.
+7. Resample has no preview: there is nothing to hear at the session rate except the converter's filtering.
+8. Clean Up Sources also deletes files in `sources/` that no source references (for example, results of undone processes). That is what keeps a package from growing with every Apply and undo.

@@ -21,6 +21,9 @@ enum MainMenu {
         file.addItem(.separator())
         item(file, "Import Audio...", #selector(MainWindowController.importAudio(_:)), "i")
         file.addItem(.separator())
+        item(file, "Consolidate", #selector(MainWindowController.consolidate(_:)), "")
+        item(file, "Clean Up Sources...", #selector(MainWindowController.cleanUpSources(_:)), "")
+        file.addItem(.separator())
         item(file, "Close", #selector(NSWindow.performClose(_:)), "w")
         item(file, "Save", #selector(MainWindowController.saveDocument(_:)), "s")
         item(file, "Save As...", #selector(MainWindowController.saveDocumentAs(_:)), "s", [.command, .shift])
@@ -58,6 +61,13 @@ enum MainMenu {
         item(view, "Hide Inspector", #selector(MainWindowController.toggleInspector(_:)), "i", [.command, .option])
         view.addItem(.separator())
         item(view, "Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control])
+
+        let process = submenu(main, "Process")
+        for kind in ProcessKind.allCases {
+            let i = item(process, kind.title + "...", #selector(MainWindowController.showProcess(_:)), "")
+            i.representedObject = kind.rawValue
+            if kind == .reverse || kind == .trimSilence { process.addItem(.separator()) }
+        }
 
         let play = submenu(main, "Playback")
         item(play, "Play", #selector(MainWindowController.togglePlay(_:)), " ", [])

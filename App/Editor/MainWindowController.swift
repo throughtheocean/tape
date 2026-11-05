@@ -287,6 +287,58 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         window.beginSheet(sheet)
     }
 
+    // MARK: Process
+
+    private var processSheet: NSWindow?
+    private(set) var processSession: ProcessSession?
+    private(set) var openAlert: NSAlert?
+
+    @objc func showProcess(_ sender: Any?) {
+        guard let window, processSheet == nil,
+              let raw = (sender as? NSMenuItem)?.representedObject as? String, let kind = ProcessKind(rawValue: raw) else { return }
+        let session = ProcessSession(kind: kind, editor: editor)
+        let sheetView = ProcessSheet(session: session) { [weak self] in
+            guard let self, let sheet = self.processSheet else { return }
+            window.endSheet(sheet)
+            self.processSheet = nil
+            self.processSession = nil
+        }
+        let sheet = NSWindow(contentViewController: NSHostingController(rootView: sheetView))
+        sheet.appearance = NSAppearance(named: .darkAqua)
+        processSheet = sheet
+        processSession = session
+        window.beginSheet(sheet)
+    }
+
+    @objc func consolidate(_ sender: Any?) {
+        tapeDocument.consolidate { [weak self] error in
+            if let error { self?.showError("Consolidate failed: \(error.localizedDescription)") }
+        }
+    }
+
+    @objc func cleanUpSources(_ sender: Any?) {
+        guard let window else { return }
+        let preview = tapeDocument.cleanUpPreview()
+        guard preview.sources + preview.files > 0 else {
+            showError("There are no unused sources.")
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = "Clean up sources?"
+        alert.informativeText = "\(preview.sources) unused source\(preview.sources == 1 ? "" : "s") and \(preview.files) file\(preview.files == 1 ? "" : "s") "
+            + "(\(ByteCountFormatter.string(fromByteCount: preview.bytes, countStyle: .file))) that no region uses will be deleted. "
+            + "This clears undo and cannot be undone."
+        alert.addButton(withTitle: "Remove")
+        alert.addButton(withTitle: "Cancel")
+        openAlert = alert
+        alert.beginSheetModal(for: window) { response in
+            MainActor.assumeIsolated {
+                self.openAlert = nil
+                if response == .alertFirstButtonReturn { self.tapeDocument.cleanUpSources() }
+            }
+        }
+    }
+
     /// Shows the inspector if hidden, for double click on a region.
     func revealInspector() {
         guard let inspector = topSplit.arrangedSubviews.last,
@@ -339,6 +391,15 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             return !editor.selectedIDs.isEmpty
         case #selector(bladeRegions(_:)), #selector(selectAll(_:)):
             return !tapeDocument.project.regions.isEmpty
+        case #selector(showProcess(_:)):
+            return processSheet == nil && fadeSheet == nil && !RecordController.shared.isRecording && ProcessSession.canProcess(editor)
+        case #selector(consolidate(_:)):
+            return tapeDocument.project.sources.contains {
+                if case .external = $0.location { return true }
+                return false
+            }
+        case #selector(cleanUpSources(_:)):
+            return !RecordController.shared.isRecording
         case #selector(selectTool(_:)):
             item.state = editor.tool == .select ? .on : .off
             return true

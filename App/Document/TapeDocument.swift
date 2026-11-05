@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import Combine
 import TapeCore
 
@@ -195,6 +196,125 @@ final class TapeDocument: ObservableObject {
             livePoint = position + ref.sessionPreRoll(sessionRate: rate)
         }
         return livePoint
+    }
+
+    // MARK: Processing and source housekeeping
+
+    /// A new file name in `sources/` that does not exist yet.
+    func newSourceFile(base: String, ext: String = "caf") -> (name: String, url: URL) {
+        let clean = base.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
+        var name = "\(clean).\(ext)"
+        var n = 2
+        while FileManager.default.fileExists(atPath: package.sourcesURL.appendingPathComponent(name).path) {
+            name = "\(clean) \(n).\(ext)"
+            n += 1
+        }
+        return (name, package.sourcesURL.appendingPathComponent(name))
+    }
+
+    /// Registers a source loaded elsewhere (a process result) so regions can switch to it without a gap.
+    func adopt(_ source: LoadedSource) {
+        loaded[source.ref.id] = source
+        failures[source.ref.id] = nil
+    }
+
+    /// Sources no region uses.
+    var unusedSources: [SourceRef] {
+        let used = Set(project.regions.map(\.sourceId))
+        return project.sources.filter { !used.contains($0.id) }
+    }
+
+    /// Files in `sources/` that no remaining source points to, plus the unused sources' own package files.
+    private func orphanFiles(keeping refs: [SourceRef]) -> [URL] {
+        let kept = Set(refs.compactMap { ref -> String? in
+            if case let .package(fileName) = ref.location { return fileName }
+            return nil
+        })
+        let files = (try? FileManager.default.contentsOfDirectory(atPath: package.sourcesURL.path)) ?? []
+        return files.filter { !kept.contains($0) && !$0.hasPrefix(".") }.map { package.sourcesURL.appendingPathComponent($0) }
+    }
+
+    /// What Clean Up Sources would remove: unused sources and their files, in bytes.
+    func cleanUpPreview() -> (sources: Int, files: Int, bytes: Int64) {
+        let unused = Set(unusedSources.map(\.id))
+        let files = orphanFiles(keeping: project.sources.filter { !unused.contains($0.id) })
+        let bytes = files.reduce(Int64(0)) { sum, url in
+            sum + Int64((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        }
+        return (unused.count, files.count, bytes)
+    }
+
+    /// Removes unused sources, their files in `sources/` and their caches. Clears undo, since undo could
+    /// point regions back at deleted files.
+    func cleanUpSources() {
+        let unused = Set(unusedSources.map(\.id))
+        var next = project
+        next.sources.removeAll { unused.contains($0.id) }
+        for url in orphanFiles(keeping: next.sources) { try? FileManager.default.removeItem(at: url) }
+        for id in unused {
+            try? FileManager.default.removeItem(at: package.peakURL(for: id))
+            if let caches = try? FileManager.default.contentsOfDirectory(atPath: package.peaksURL.path) {
+                for name in caches where name.hasPrefix(id.uuidString) {
+                    try? FileManager.default.removeItem(at: package.peaksURL.appendingPathComponent(name))
+                }
+            }
+            loaded[id] = nil
+            failures[id] = nil
+        }
+        project = next
+        undoManager.removeAllActions()
+        changed()
+    }
+
+    /// Copies every external source into `sources/` as float32 CAF at its own rate and points the
+    /// sources there, as one undo step. Runs the copies off the main thread.
+    func consolidate(completion: @escaping @MainActor (Error?) -> Void) {
+        let externals = project.sources.filter {
+            if case .external = $0.location { return true }
+            return false
+        }
+        guard !externals.isEmpty else { return completion(nil) }
+        let package = package
+        let targets = externals.map { ref in (ref, newSourceFile(base: (ref.name as NSString).deletingPathExtension)) }
+        Task {
+            let failure: Error? = await Task.detached(priority: .userInitiated) {
+                do {
+                    try package.ensureDirectories()
+                    for (ref, file) in targets {
+                        try Self.copyAsCAF(from: package.resolve(ref), to: file.url)
+                    }
+                    return nil
+                } catch {
+                    for (_, file) in targets { try? FileManager.default.removeItem(at: file.url) }
+                    return error
+                }
+            }.value
+            if failure == nil {
+                apply("Consolidate") { p in
+                    for (ref, file) in targets {
+                        if let i = p.sources.firstIndex(where: { $0.id == ref.id }) {
+                            p.sources[i].location = .package(fileName: file.name)
+                        }
+                    }
+                }
+            }
+            completion(failure)
+        }
+    }
+
+    nonisolated private static func copyAsCAF(from input: URL, to output: URL) throws {
+        let inFile = try AVAudioFile(forReading: input)
+        let format = inFile.processingFormat
+        let outFile = try AVAudioFile(forWriting: output, settings: AudioFileFormat(container: .caf, sampleFormat: .float32,
+                                                                                  sampleRate: format.sampleRate,
+                                                                                  channelCount: Int(format.channelCount)).settings,
+                                      commonFormat: .pcmFormatFloat32, interleaved: false)
+        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 65536)!
+        while inFile.framePosition < inFile.length {
+            try inFile.read(into: buffer)
+            if buffer.frameLength == 0 { break }
+            try outFile.write(from: buffer)
+        }
     }
 
     // MARK: Sources

@@ -99,6 +99,19 @@ final class SelfTest {
             setting(args)
         case "sheet":
             sheet(args.first ?? "return", controller: c)
+        case "preview":
+            c.processSession?.setPreview(args.first == "on")
+            write("preview \(c.processSession?.previewing == true ? "on" : "off") playing \(editor.isPlaying)")
+        case "param":
+            param(args, session: c.processSession)
+        case "waitApply":
+            for _ in 0..<600 {
+                if c.processSession == nil || c.processSession?.isApplying == false { break }
+                try await Task.sleep(nanoseconds: 50_000_000)
+            }
+            write("apply finished, sheet open \(c.window?.attachedSheet != nil) status '\(c.processSession?.status ?? "")'")
+        case "measure":
+            measure(c, label: args.joined(separator: " "))
         case "quit":
             flushLog()
             NSApp.terminate(nil)
@@ -238,6 +251,44 @@ final class SelfTest {
         }
     }
 
+    private func param(_ args: [String], session: ProcessSession?) {
+        guard let session, args.count == 2, let v = Double(args[1]) else {
+            write("param needs an open process sheet, a name and a value")
+            return
+        }
+        let paths: [String: WritableKeyPath<ProcessParameters, Double>] = [
+            "lufs": \.lufsTarget, "ceiling": \.truePeakCeiling, "peak": \.peakTarget, "gain": \.gainDB,
+            "threshold": \.compThreshold, "pregain": \.limPreGain, "silence": \.silenceThreshold, "hold": \.silenceHoldMs,
+            "rate": \.resampleRate,
+        ]
+        if args[0] == "mode" {
+            session.parameters.loudnessMode = args[1] != "0"
+        } else if let path = paths[args[0]] {
+            session.parameters[keyPath: path] = v
+        } else {
+            write("unknown param \(args[0])")
+            return
+        }
+        write("param \(args[0]) = \(args[1])")
+    }
+
+    /// Renders the range, else the selected regions' span, else the whole document, and logs loudness and peaks.
+    private func measure(_ c: MainWindowController, label: String) {
+        let e = c.editor
+        let selected = e.selectedRegions.map(\.timelineRange)
+        let span = e.range
+            ?? (selected.isEmpty ? nil : SampleRange(start: selected.map(\.start).min()!, end: selected.map(\.end).max()!))
+            ?? SampleRange(start: 0, end: e.documentLength)
+        guard !span.isEmpty else { return }
+        let list = c.tapeDocument.editList()
+        let out = SampleBuffer(channelCount: list.channelCount, capacity: Int(span.length))
+        EditListRenderer().render(list, start: span.start, frames: Int(span.length), into: out)
+        let buffer = AudioBuffer(channels: out.toArrays(count: Int(span.length)), sampleRate: e.sessionRate)
+        let mean = buffer.channels[0].reduce(0, +) / Float(max(1, buffer.frameCount))
+        write(String(format: "measure %@: %.3f LUFS, peak %.3f dBFS, true peak %.3f dBTP, mean %.5f over %lld frames", label,
+                     Loudness.integrated(buffer), 20 * log10(Double(buffer.peak())), Loudness.truePeakDB(buffer), mean, span.length))
+    }
+
     /// Presses Return or Escape in the attached sheet, or reports that none is open.
     private func sheet(_ key: String, controller: MainWindowController) {
         guard let sheet = controller.window?.attachedSheet else {
@@ -246,6 +297,12 @@ final class SelfTest {
         }
         let chars = key == "escape" ? "\u{1b}" : "\r"
         let code: UInt16 = key == "escape" ? 53 : 36
+        let alertButton = key == "escape" ? controller.openAlert?.buttons.last : controller.openAlert?.buttons.first
+        if let button = alertButton ?? findButton(sheet.contentView, keyEquivalent: chars) {
+            button.performClick(nil)
+            write("sheet \(key) clicked '\(button.title)', sheet open \(controller.window?.attachedSheet != nil)")
+            return
+        }
         for type in [NSEvent.EventType.keyDown, .keyUp] {
             if let e = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
                                         windowNumber: sheet.windowNumber, context: nil, characters: chars,
@@ -254,6 +311,16 @@ final class SelfTest {
             }
         }
         write("sheet \(key) sent, sheet open \(controller.window?.attachedSheet != nil)")
+    }
+
+    /// AppKit buttons (NSAlert) take a click; SwiftUI sheets get key events instead.
+    private func findButton(_ view: NSView?, keyEquivalent: String) -> NSButton? {
+        guard let view else { return nil }
+        if let b = view as? NSButton, b.keyEquivalent == keyEquivalent { return b }
+        for sub in view.subviews {
+            if let b = findButton(sub, keyEquivalent: keyEquivalent) { return b }
+        }
+        return nil
     }
 
     // MARK: Mouse
@@ -293,7 +360,8 @@ final class SelfTest {
         let rec = RecordController.shared
         s += " input \(rec.device?.name ?? "none") needsPermission \(rec.needsPermission) recording \(rec.isRecording)"
         if let err = rec.inputError { s += " inputError '\(err)'" }
-        s += " tool \(e.tool) sheet \(c.window?.attachedSheet != nil)"
+        s += " tool \(e.tool) sheet \(c.window?.attachedSheet != nil) sources \(d.project.sources.count) unused \(d.unusedSources.count) orphans \(d.cleanUpPreview().files)"
+        if let alert = c.openAlert { s += " alert '\(alert.messageText)'" }
         if let responder = c.window?.firstResponder { s += " focus \(type(of: responder))" }
         write(s)
         for (i, r) in d.project.regions.enumerated() {

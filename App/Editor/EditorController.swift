@@ -223,6 +223,21 @@ final class EditorController: ObservableObject {
         stopPlayback(at: playback.position)
     }
 
+    /// Loops `span` for a process preview; the caller has set the preview edit list or insert.
+    func previewPlay(_ span: SampleRange) {
+        guard !span.isEmpty else { return }
+        playback.setLoop(span)
+        let from = (span.start..<span.end).contains(playhead) && isPlaying ? playback.position : span.start
+        startPlayback(from: from, speed: 1)
+    }
+
+    /// Back to the document's edit list and loop after a preview.
+    func endPreview() {
+        if isPlaying { stopPlayback(at: playback.position) }
+        playback.setEditList(document.editList())
+        updateLoop()
+    }
+
     private func startPlayback(from: Int64, speed: Int) {
         guard document.project.sessionRate != nil else { return }
         configureEngineIfNeeded()
