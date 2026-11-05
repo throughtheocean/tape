@@ -7,11 +7,15 @@ import TapeCore
 @MainActor
 final class TimelineView: NSView {
     static let rulerHeight: CGFloat = 24
+    static let amplitudeBarWidth: CGFloat = 18
 
     let editor: EditorController
     let ruler: RulerView
     let metalView: TimelineMetalView
     let labels: LabelsOverlayView
+    let toolStrip = TimelineToolStrip(frame: .zero)
+    let amplitudeBar = ZoomBarView(vertical: true, toolTip: "Vertical zoom (Option Shift scroll). Double click to reset.")
+    private let corner = NSView()
     private(set) var renderer: TimelineRenderer?
     private var displayLink: CADisplayLink?
     private var dirty = true
@@ -32,6 +36,24 @@ final class TimelineView: NSView {
         addSubview(metalView)
         addSubview(labels)
         addSubview(ruler)
+        addSubview(toolStrip)
+        addSubview(amplitudeBar)
+        corner.wantsLayer = true
+        corner.layer?.backgroundColor = Theme.chrome.cgColor
+        addSubview(corner)
+
+        let zoomBar = toolStrip.zoomBar
+        zoomBar.value = { [unowned editor] in editor.zoom.normalized }
+        zoomBar.setValue = { [unowned editor] in editor.setZoomNormalized($0) }
+        zoomBar.reset = { [unowned editor] in editor.fitAll() }
+        amplitudeBar.value = { [unowned editor] in editor.amplitudeNormalized }
+        amplitudeBar.setValue = { [unowned editor] in editor.setAmplitudeNormalized($0) }
+        amplitudeBar.reset = { [unowned editor] in editor.setAmplitudeNormalized(0) }
+        toolStrip.snap.isOn = { AppSettings.shared.snapToZeroCrossing }
+        toolStrip.snap.toggle = { [unowned editor] in
+            AppSettings.shared.snapToZeroCrossing.toggle()
+            editor.needsDisplay?()
+        }
 
         editor.needsDisplay = { [weak self] in self?.setDirty() }
     }
@@ -44,11 +66,17 @@ final class TimelineView: NSView {
     override func layout() {
         super.layout()
         let b = bounds
-        ruler.frame = NSRect(x: 0, y: 0, width: b.width, height: Self.rulerHeight)
-        let track = NSRect(x: 0, y: Self.rulerHeight, width: b.width, height: max(0, b.height - Self.rulerHeight))
+        let w = max(0, b.width - Self.amplitudeBarWidth)
+        ruler.frame = NSRect(x: 0, y: 0, width: w, height: Self.rulerHeight)
+        let track = NSRect(x: 0, y: Self.rulerHeight, width: w, height: max(0, b.height - Self.rulerHeight))
         metalView.frame = track
         labels.frame = track
-        editor.timelineWidth = Double(b.width)
+        toolStrip.frame = NSRect(x: 0, y: track.minY + TimelineLayout.minimapHeight + 1,
+                                 width: w, height: TimelineLayout.toolStripHeight - 1)
+        let barTop = track.minY + TimelineLayout.trackTop
+        corner.frame = NSRect(x: w, y: 0, width: Self.amplitudeBarWidth, height: barTop)
+        amplitudeBar.frame = NSRect(x: w, y: barTop, width: Self.amplitudeBarWidth, height: max(0, b.height - barTop))
+        editor.timelineWidth = Double(w)
         setDirty()
     }
 
@@ -80,6 +108,8 @@ final class TimelineView: NSView {
         dirty = false
         metalView.draw()
         ruler.needsDisplay = true
+        toolStrip.refresh()
+        amplitudeBar.refreshIfChanged()
         labels.update()
         if tickDurations != nil { tickDurations?.append((CACurrentMediaTime() - t0) * 1000) }
     }
@@ -126,12 +156,12 @@ final class TimelineMetalView: MTKView {
         let point = convert(event.locationInWindow, from: nil)
         let precise = event.hasPreciseScrollingDeltas
         let flags = event.modifierFlags
-        if flags.contains(.command) {
-            let dy = event.scrollingDeltaY
-            editor.zoom(by: exp(-Double(dy) * (precise ? 0.01 : 0.12)), anchorX: Double(point.x))
-        } else if flags.contains(.option) {
-            let dy = event.scrollingDeltaY
+        // Shift turns a mouse wheel into horizontal deltas, so take the larger axis.
+        let dy = abs(event.scrollingDeltaY) >= abs(event.scrollingDeltaX) ? event.scrollingDeltaY : event.scrollingDeltaX
+        if flags.contains(.option), flags.contains(.shift) {
             editor.zoomAmplitude(by: exp(Double(dy) * (precise ? 0.01 : 0.12)))
+        } else if flags.contains(.command) || flags.contains(.option) {
+            editor.zoom(by: exp(-Double(dy) * (precise ? 0.01 : 0.12)), anchorX: Double(point.x))
         } else {
             var dx = event.scrollingDeltaX
             if abs(event.scrollingDeltaY) > abs(dx) { dx = event.scrollingDeltaY }

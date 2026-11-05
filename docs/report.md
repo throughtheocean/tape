@@ -105,3 +105,39 @@ I have not tested keyboard and mouse input myself. Computer Use needs Screen Rec
 9. Docs naming: the spec asks for `YYMMDD-name-01` file names and also names `docs/report.md` and `docs/v2.md` explicitly. I used the explicit names. New docs files will follow `YYMMDD-name-01`.
 10. PolyTracker has no separate presets package. In M5 the hardware presets will be taken from its `ExportPreset.swift` and `SampleProcessor` code.
 11. A `-TapeBenchmark <file>` launch argument runs the scripted measurement. It is a test harness, not a user feature.
+
+## M1 addendum: zoom bars and zero crossing snap
+
+Requested by Maik after M1, built before M2.
+
+### What was built
+
+- Horizontal zoom bar in a 22 pt strip under the minimap, right aligned. It drives the same logarithmic zoom as the transport slider, and double click fits all.
+- Vertical (amplitude) zoom bar in an 18 pt column on the right edge of the timeline, 1x to 32x, logarithmic. Double click resets to 1x. Both bars also respond to scrolling over them.
+- Scroll modifiers changed, Logic style: Option scroll zooms horizontally around the pointer, Option Shift scroll zooms vertically. Command scroll and pinch still zoom horizontally.
+- Snap to zero crossing:
+  - Toggle button left of the horizontal zoom bar, plus the View menu item "Snap to Zero Crossing" on N (the Final Cut Pro snapping key).
+  - On by default, persisted in UserDefaults.
+  - In M1 it applies to range in and out (I and O). In M3 it will also apply to trims and marked ranges.
+  - The search is `ZeroCrossing.nearest` in TapeCore. It renders the mix through `EditListRenderer` around the frame and picks the nearest sign change, on the sample closer to zero. The radius is 4 points at the current zoom, capped at 10 ms and at least 1 sample. Channels are summed, so stereo snaps where the mono sum crosses zero.
+
+### Tests
+
+5 new tests, 28 in total, all green: nearest crossing on either side, picking the sample closest to zero, no crossing within the radius, silence, and stereo sum.
+
+### Tested by hand
+
+Relaunched with the existing document. The tool strip, snap toggle and both zoom bars draw in place, and the minimap, ruler and waveform use the narrower width correctly. Dragging the bars and the scroll modifiers have not been tried by hand yet, for the same reason as in M1 (no Screen Recording permission for Computer Use).
+
+### Deviations
+
+- Section 5 of the spec puts amplitude zoom on Option scroll. At Maik's request it moved to Option Shift scroll, and Option scroll now zooms horizontally.
+- Section 9 says "No toolbar icons for things that have keys". The snap toggle is a button with a key (N), because Maik asked for a button.
+
+### Agreed changes for later milestones
+
+- M3:
+  - Shift click and Shift drag mark audio, and Command click does multi-select. This replaces the spec's Shift click multi-select.
+  - Scissor tool button next to the zoom bar, in addition to Command B.
+  - Corner fade handles as specified, made to feel like DaVinci Resolve: quick drag from the top corners.
+- M5: a right-click menu on a region, with "Export Region..." exporting just that region.

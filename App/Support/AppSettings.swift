@@ -38,6 +38,11 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(inspectorVisible, forKey: "inspectorVisible") }
     }
 
+    /// Range edges (and in M3 trims and marks) snap to the nearest zero crossing.
+    @Published var snapToZeroCrossing: Bool {
+        didSet { defaults.set(snapToZeroCrossing, forKey: "snapToZeroCrossing") }
+    }
+
     var inspectorWidth: Double {
         get { (defaults.object(forKey: "inspectorWidth") as? Double) ?? 280 }
         set { defaults.set(newValue, forKey: "inspectorWidth") }
@@ -58,5 +63,6 @@ final class AppSettings: ObservableObject {
         let hex = defaults.object(forKey: "accentColor") as? Int
         accentHex = UInt32(hex ?? 0x3B82F6)
         inspectorVisible = defaults.object(forKey: "inspectorVisible") as? Bool ?? true
+        snapToZeroCrossing = defaults.object(forKey: "snapToZeroCrossing") as? Bool ?? true
     }
 }

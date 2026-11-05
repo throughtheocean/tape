@@ -38,6 +38,8 @@ enum MainMenu {
         item(view, "Zoom Out", #selector(MainWindowController.zoomOutTimeline(_:)), "-")
         item(view, "Zoom to Fit", #selector(MainWindowController.zoomToFit(_:)), "z", [.shift])
         view.addItem(.separator())
+        item(view, "Snap to Zero Crossing", #selector(MainWindowController.toggleSnapToZero(_:)), "n", [])
+        view.addItem(.separator())
         item(view, "Hide Inspector", #selector(MainWindowController.toggleInspector(_:)), "i", [.command, .option])
         view.addItem(.separator())
         item(view, "Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control])

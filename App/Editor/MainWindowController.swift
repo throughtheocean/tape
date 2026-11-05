@@ -247,6 +247,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     @objc func zoomInTimeline(_ sender: Any?) { editor.zoomAroundPlayhead(by: 0.5) }
     @objc func zoomOutTimeline(_ sender: Any?) { editor.zoomAroundPlayhead(by: 2) }
 
+    @objc func toggleSnapToZero(_ sender: Any?) {
+        AppSettings.shared.snapToZeroCrossing.toggle()
+        editor.needsDisplay?()
+    }
+
     @objc func toggleInspector(_ sender: Any?) {
         guard let inspector = topSplit.arrangedSubviews.last else { return }
         let show = inspector.isHidden || topSplit.isSubviewCollapsed(inspector)
@@ -266,6 +271,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             return tapeDocument.project.sessionRate != nil
         case #selector(toggleLoop(_:)):
             item.state = editor.loopEnabled ? .on : .off
+            return true
+        case #selector(toggleSnapToZero(_:)):
+            item.state = AppSettings.shared.snapToZeroCrossing ? .on : .off
             return true
         case #selector(toggleInspector(_:)):
             item.title = AppSettings.shared.inspectorVisible ? "Hide Inspector" : "Show Inspector"

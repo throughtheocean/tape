@@ -34,7 +34,9 @@ final class FloatScratch {
 /// Vertical layout of the Metal timeline in points, top down.
 enum TimelineLayout {
     static let minimapHeight: CGFloat = 28
-    static let trackTop: CGFloat = minimapHeight + 9
+    /// The tool strip (snap, horizontal zoom) is an AppKit view laid over this band.
+    static let toolStripHeight: CGFloat = 22
+    static let trackTop: CGFloat = minimapHeight + toolStripHeight + 9
     static let bottomInset: CGFloat = 10
     static let nameStrip: CGFloat = 18
 

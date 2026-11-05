@@ -240,15 +240,25 @@ final class EditorController: ObservableObject {
     // MARK: Range and loop
 
     func setRangeIn() {
-        let end = range.map { $0.end > playhead ? $0.end : documentLength } ?? documentLength
-        range = SampleRange(start: playhead, end: max(end, playhead))
+        let edge = snapped(playhead)
+        let end = range.map { $0.end > edge ? $0.end : documentLength } ?? documentLength
+        range = SampleRange(start: edge, end: max(end, edge))
         rangeChanged()
     }
 
     func setRangeOut() {
-        let start = range.map { $0.start < playhead ? $0.start : 0 } ?? 0
-        range = SampleRange(start: min(start, playhead), end: playhead)
+        let edge = snapped(playhead)
+        let start = range.map { $0.start < edge ? $0.start : 0 } ?? 0
+        range = SampleRange(start: min(start, edge), end: edge)
         rangeChanged()
+    }
+
+    /// Nearest zero crossing within 4 points (at most 10 ms) when snapping is on.
+    func snapped(_ frame: Int64) -> Int64 {
+        guard AppSettings.shared.snapToZeroCrossing, documentLength > 0, samplesPerPoint > 0 else { return frame }
+        let radius = Int(min(max(4 * samplesPerPoint, 1), sessionRate * 0.01))
+        let snapped = ZeroCrossing.nearest(in: document.editList(), around: frame, radius: radius)
+        return min(max(snapped, 0), documentLength)
     }
 
     func clearRange() {
@@ -319,9 +329,18 @@ final class EditorController: ObservableObject {
         viewChanged()
     }
 
+    static let maxAmplitudeZoom = 32.0
+
     func zoomAmplitude(by factor: Double) {
-        amplitudeZoom = min(max(amplitudeZoom * factor, 1), 32)
+        amplitudeZoom = min(max(amplitudeZoom * factor, 1), Self.maxAmplitudeZoom)
         viewChanged()
+    }
+
+    /// Amplitude zoom as 0 (1x) to 1 (32x), logarithmic.
+    var amplitudeNormalized: Double { log(amplitudeZoom) / log(Self.maxAmplitudeZoom) }
+
+    func setAmplitudeNormalized(_ value: Double) {
+        zoomAmplitude(by: exp(min(max(value, 0), 1) * log(Self.maxAmplitudeZoom)) / amplitudeZoom)
     }
 
     /// Slider position 0 (fit) to 1 (closest), logarithmic.
