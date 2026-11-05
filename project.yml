@@ -1,0 +1,38 @@
+name: Tape
+options:
+  bundleIdPrefix: com.maikbluhm
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+packages:
+  TapeCore:
+    path: TapeCore
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: YES
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Manual
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: NO
+    DEAD_CODE_STRIPPING: YES
+targets:
+  Tape:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+    dependencies:
+      - package: TapeCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.maikbluhm.tape
+        PRODUCT_NAME: Tape
+        INFOPLIST_FILE: App/Info.plist
+        CODE_SIGN_ENTITLEMENTS: App/Tape.entitlements
+        MARKETING_VERSION: "0.1"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO

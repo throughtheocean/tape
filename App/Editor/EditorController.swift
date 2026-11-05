@@ -1,0 +1,364 @@
+import AppKit
+import Combine
+import TapeCore
+
+/// Playhead readout published at display rate, kept apart so other views do not re-render.
+@MainActor
+final class PlayheadClock: ObservableObject {
+    @Published var position: Int64 = 0
+}
+
+/// Zoom readout for the transport slider.
+@MainActor
+final class ZoomState: ObservableObject {
+    /// 0 is fit all, 1 is the closest zoom.
+    @Published var normalized: Double = 0
+}
+
+/// State and actions of one editor window: transport, zoom, scroll and range.
+@MainActor
+final class EditorController: ObservableObject {
+    let document: TapeDocument
+    let playback = PlaybackEngine()
+    let clock = PlayheadClock()
+    let zoom = ZoomState()
+
+    /// Called when anything the timeline draws has changed.
+    var needsDisplay: (() -> Void)?
+    /// Width of the timeline in points, set by the timeline view.
+    var timelineWidth: Double = 1000 {
+        didSet { if oldValue != timelineWidth { clampView(); updateZoomReadout() } }
+    }
+
+    private(set) var viewStart: Double
+    private(set) var samplesPerPoint: Double
+    private(set) var amplitudeZoom: Double
+    @Published private(set) var range: SampleRange?
+    @Published private(set) var loopEnabled: Bool
+    @Published private(set) var isPlaying = false
+    @Published private(set) var speed = 1
+    @Published var errorMessage: String?
+    private(set) var playhead: Int64
+
+    static let minSamplesPerPoint = 1.0 / 32
+    private var subscriptions: Set<AnyCancellable> = []
+    private var configuredFormat: (Double, Int)?
+    private var lastLatencyLogged = false
+
+    init(document: TapeDocument) {
+        self.document = document
+        let v = document.view
+        viewStart = v.viewStart
+        samplesPerPoint = v.samplesPerPoint ?? 0
+        amplitudeZoom = v.amplitudeZoom
+        range = v.range
+        loopEnabled = v.loopEnabled
+        playhead = v.playhead
+        clock.position = playhead
+
+        document.$revision
+            .sink { [weak self] _ in
+                DispatchQueue.main.async { self?.documentChanged() }
+            }
+            .store(in: &subscriptions)
+    }
+
+    var documentLength: Int64 { document.project.length }
+    var sessionRate: Double { document.sessionRate }
+
+    // MARK: Document sync
+
+    private func documentChanged() {
+        configureEngineIfNeeded()
+        playback.setEditList(document.editList())
+        updateLoop()
+        if samplesPerPoint <= 0, documentLength > 0 { fitAll() }
+        clampView()
+        updateZoomReadout()
+        needsDisplay?()
+    }
+
+    private func configureEngineIfNeeded() {
+        guard let rate = document.project.sessionRate else { return }
+        let format = (rate, document.project.channelCount)
+        if let configuredFormat, configuredFormat == format { return }
+        do {
+            try playback.configure(sessionRate: rate, channelCount: format.1)
+            playback.locate(playhead)
+            configuredFormat = format
+        } catch {
+            errorMessage = "Audio output could not start: \(error.localizedDescription)"
+        }
+    }
+
+    private func saveView() {
+        var v = document.view
+        v.playhead = playhead
+        v.range = range
+        v.loopEnabled = loopEnabled
+        v.viewStart = viewStart
+        v.samplesPerPoint = samplesPerPoint > 0 ? samplesPerPoint : nil
+        v.amplitudeZoom = amplitudeZoom
+        guard v != document.view else { return }
+        document.view = v
+        document.scheduleSave()
+    }
+
+    // MARK: Display link
+
+    /// Called once per display frame by the timeline.
+    func tick() {
+        guard isPlaying else { return }
+        if !lastLatencyLogged {
+            playback.updateStartLatency()
+            if let ms = playback.lastStartLatencyMs {
+                lastLatencyLogged = true
+                NSLog("Tape play start latency: \(String(format: "%.1f", ms)) ms")
+            }
+        }
+        var p = playback.position
+        let loop = currentLoop()
+        if speed > 0, loop == nil, p >= documentLength {
+            p = documentLength
+            stopPlayback(at: p)
+        } else if speed < 0, loop == nil, p <= 0 {
+            p = 0
+            stopPlayback(at: p)
+        }
+        setPlayhead(p, follow: true)
+    }
+
+    private func setPlayhead(_ p: Int64, follow: Bool) {
+        playhead = p
+        if clock.position != p { clock.position = p }
+        if follow { followPlayhead() }
+        needsDisplay?()
+    }
+
+    /// Pages the view when the playhead leaves it during playback.
+    private func followPlayhead() {
+        guard samplesPerPoint > 0 else { return }
+        let visible = timelineWidth * samplesPerPoint
+        let p = Double(playhead)
+        if p > viewStart + visible {
+            viewStart = p
+            clampView()
+        } else if p < viewStart {
+            viewStart = max(0, p - visible * 0.9)
+        }
+    }
+
+    // MARK: Transport
+
+    var lastStartLatencyMs: Double? { playback.lastStartLatencyMs }
+
+    func togglePlay() {
+        if isPlaying {
+            stopPlayback(at: playback.position)
+        } else {
+            var from = playhead
+            if currentLoop() == nil, from >= documentLength { from = 0 }
+            startPlayback(from: from, speed: 1)
+        }
+    }
+
+    func shuttleForward() {
+        if isPlaying, speed > 0 {
+            startPlayback(from: playback.position, speed: min(speed * 2, 8))
+        } else {
+            let from = playhead >= documentLength && currentLoop() == nil ? 0 : (isPlaying ? playback.position : playhead)
+            startPlayback(from: from, speed: 1)
+        }
+    }
+
+    func shuttleBackward() {
+        if isPlaying, speed < 0 {
+            startPlayback(from: playback.position, speed: max(speed * 2, -8))
+        } else {
+            let from = isPlaying ? playback.position : playhead
+            startPlayback(from: from, speed: -1)
+        }
+    }
+
+    func stop() {
+        guard isPlaying else { return }
+        stopPlayback(at: playback.position)
+    }
+
+    private func startPlayback(from: Int64, speed: Int) {
+        guard document.project.sessionRate != nil else { return }
+        configureEngineIfNeeded()
+        lastLatencyLogged = false
+        playback.play(from: from, speed: speed)
+        isPlaying = true
+        self.speed = speed
+        setPlayhead(from, follow: false)
+    }
+
+    private func stopPlayback(at position: Int64) {
+        playback.pause()
+        isPlaying = false
+        speed = 1
+        let p = min(max(position, 0), max(documentLength, 0))
+        playback.locate(p)
+        setPlayhead(p, follow: false)
+        saveView()
+    }
+
+    /// Moves the playhead; playback continues from there if running.
+    func locate(_ frame: Int64) {
+        let p = min(max(frame, 0), max(documentLength, 0))
+        if isPlaying {
+            playback.play(from: p, speed: speed)
+        } else {
+            playback.locate(p)
+        }
+        setPlayhead(p, follow: false)
+        if !isPlaying { saveView() }
+    }
+
+    func goToStart() {
+        locate(0)
+        revealPlayhead()
+    }
+
+    func goToEnd() {
+        locate(documentLength)
+        revealPlayhead()
+    }
+
+    private func revealPlayhead() {
+        let visible = timelineWidth * samplesPerPoint
+        let p = Double(playhead)
+        if p < viewStart || p > viewStart + visible {
+            viewStart = p - visible / 2
+            clampView()
+            viewChanged()
+        }
+    }
+
+    // MARK: Range and loop
+
+    func setRangeIn() {
+        let end = range.map { $0.end > playhead ? $0.end : documentLength } ?? documentLength
+        range = SampleRange(start: playhead, end: max(end, playhead))
+        rangeChanged()
+    }
+
+    func setRangeOut() {
+        let start = range.map { $0.start < playhead ? $0.start : 0 } ?? 0
+        range = SampleRange(start: min(start, playhead), end: playhead)
+        rangeChanged()
+    }
+
+    func clearRange() {
+        guard range != nil else { return }
+        range = nil
+        rangeChanged()
+    }
+
+    func toggleLoop() {
+        loopEnabled.toggle()
+        updateLoop()
+        saveView()
+    }
+
+    private func rangeChanged() {
+        if let r = range, r.isEmpty { range = nil }
+        updateLoop()
+        saveView()
+        needsDisplay?()
+    }
+
+    private func currentLoop() -> SampleRange? {
+        guard loopEnabled else { return nil }
+        if let range, !range.isEmpty { return range }
+        return documentLength > 0 ? SampleRange(start: 0, end: documentLength) : nil
+    }
+
+    private func updateLoop() {
+        playback.setLoop(currentLoop())
+    }
+
+    // MARK: Zoom and scroll
+
+    var maxSamplesPerPoint: Double {
+        let length = max(Double(documentLength), sessionRate * 10)
+        return length / max(timelineWidth, 100) * 1.25
+    }
+
+    func fitAll() {
+        guard documentLength > 0 else { return }
+        samplesPerPoint = max(Self.minSamplesPerPoint, Double(documentLength) / max(timelineWidth - 20, 50))
+        viewStart = 0
+        viewChanged()
+    }
+
+    /// Zooms by `factor` (>1 zooms out) keeping the frame under `anchorX` in place.
+    func zoom(by factor: Double, anchorX: Double) {
+        guard samplesPerPoint > 0 else { return }
+        let anchorFrame = viewStart + anchorX * samplesPerPoint
+        samplesPerPoint = min(max(samplesPerPoint * factor, Self.minSamplesPerPoint), maxSamplesPerPoint)
+        viewStart = anchorFrame - anchorX * samplesPerPoint
+        viewChanged()
+    }
+
+    func zoomAroundPlayhead(by factor: Double) {
+        let x = (Double(playhead) - viewStart) / max(samplesPerPoint, 1e-9)
+        zoom(by: factor, anchorX: (0...timelineWidth).contains(x) ? x : timelineWidth / 2)
+    }
+
+    func scroll(byPoints dx: Double) {
+        viewStart += dx * samplesPerPoint
+        viewChanged()
+    }
+
+    func setView(start: Double, samplesPerPoint spp: Double) {
+        samplesPerPoint = min(max(spp, Self.minSamplesPerPoint), maxSamplesPerPoint)
+        viewStart = start
+        viewChanged()
+    }
+
+    func zoomAmplitude(by factor: Double) {
+        amplitudeZoom = min(max(amplitudeZoom * factor, 1), 32)
+        viewChanged()
+    }
+
+    /// Slider position 0 (fit) to 1 (closest), logarithmic.
+    func setZoomNormalized(_ value: Double) {
+        let lo = log(Self.minSamplesPerPoint), hi = log(maxSamplesPerPoint)
+        let spp = exp(hi + (lo - hi) * min(max(value, 0), 1))
+        let centerX = timelineWidth / 2
+        let x = (Double(playhead) - viewStart) / max(samplesPerPoint, 1e-9)
+        let anchor = (0...timelineWidth).contains(x) ? x : centerX
+        zoom(by: spp / max(samplesPerPoint, 1e-12), anchorX: anchor)
+    }
+
+    private func updateZoomReadout() {
+        guard samplesPerPoint > 0 else { return }
+        let lo = log(Self.minSamplesPerPoint), hi = log(maxSamplesPerPoint)
+        let n = (log(samplesPerPoint) - hi) / (lo - hi)
+        let v = min(max(n, 0), 1)
+        if abs(zoom.normalized - v) > 0.0005 { zoom.normalized = v }
+    }
+
+    private func clampView() {
+        guard samplesPerPoint > 0 else { return }
+        samplesPerPoint = min(samplesPerPoint, maxSamplesPerPoint)
+        let visible = timelineWidth * samplesPerPoint
+        let maxStart = max(0, Double(documentLength) - visible * 0.5)
+        viewStart = min(max(viewStart, 0), maxStart)
+    }
+
+    private func viewChanged() {
+        clampView()
+        updateZoomReadout()
+        needsDisplay?()
+        saveView()
+    }
+
+    // MARK: Geometry
+
+    func x(forFrame frame: Double) -> Double { (frame - viewStart) / samplesPerPoint }
+    func frame(forX x: Double) -> Double { viewStart + x * samplesPerPoint }
+}
