@@ -15,6 +15,24 @@ enum TimeDisplay: String, CaseIterable, Identifiable {
     }
 }
 
+/// Which reading the loudness meter shows.
+enum LoudnessMode: String, CaseIterable {
+    case momentary, shortTerm, integrated
+
+    var title: String {
+        switch self {
+        case .momentary: return "Momentary"
+        case .shortTerm: return "Short Term"
+        case .integrated: return "Integrated"
+        }
+    }
+
+    var next: LoudnessMode {
+        let all = Self.allCases
+        return all[(all.firstIndex(of: self)! + 1) % all.count]
+    }
+}
+
 /// User settings persisted in `UserDefaults`.
 @MainActor
 final class AppSettings: ObservableObject {
@@ -43,6 +61,17 @@ final class AppSettings: ObservableObject {
     @Published var snapToZeroCrossing: Bool {
         didSet { defaults.set(snapToZeroCrossing, forKey: "snapToZeroCrossing") }
     }
+
+    @Published var loudnessMode: LoudnessMode {
+        didSet { defaults.set(loudnessMode.rawValue, forKey: "loudnessMode") }
+    }
+
+    /// Target line on the loudness meter in LUFS; 0 means no target.
+    @Published var loudnessTarget: Double {
+        didSet { defaults.set(loudnessTarget, forKey: "loudnessTarget") }
+    }
+
+    static let loudnessTargets: [Double] = [0, -14, -16, -23]
 
     // MARK: Record settings
 
@@ -137,6 +166,8 @@ final class AppSettings: ObservableObject {
         accentHex = UInt32(hex ?? 0x3B82F6)
         inspectorVisible = defaults.object(forKey: "inspectorVisible") as? Bool ?? false
         snapToZeroCrossing = defaults.object(forKey: "snapToZeroCrossing") as? Bool ?? true
+        loudnessMode = LoudnessMode(rawValue: defaults.string(forKey: "loudnessMode") ?? "") ?? .shortTerm
+        loudnessTarget = defaults.object(forKey: "loudnessTarget") as? Double ?? -14
         recordDeviceUID = defaults.string(forKey: "recordDeviceUID")
         recordChannels = (defaults.array(forKey: "recordChannels") as? [Int]) ?? [0, 1]
         recordContainer = AudioContainer(rawValue: defaults.string(forKey: "recordContainer") ?? "") ?? .wav

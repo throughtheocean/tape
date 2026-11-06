@@ -171,6 +171,11 @@ extension EditorController {
     @discardableResult
     func updateMeters(now: Double) -> Bool {
         let peaks = playback.meters.drain()
+        if loudness.sampleRate != sessionRate { loudness = LoudnessMeter(sampleRate: sessionRate) }
+        if isPlaying, !loudnessWasPlaying { loudness.reset() }
+        for e in peaks?.loudness ?? [] { loudness.add(energy: e.energy, frames: e.frames) }
+        if !isPlaying, loudnessWasPlaying { loudness.clearRunning() }
+        loudnessWasPlaying = isPlaying
         let tracks = project.tracks
         var active = false
         for (i, t) in tracks.enumerated() {
@@ -189,6 +194,20 @@ extension EditorController {
             active = active || masterMeters[c].levelDB > MeterBallistics.floorDB || masterMeters[c].holdDB > MeterBallistics.floorDB
         }
         return active || isPlaying
+    }
+
+    /// The reading the loudness meter shows, in LUFS (-inf for none).
+    var loudnessReading: Double {
+        switch AppSettings.shared.loudnessMode {
+        case .momentary: return loudness.momentary
+        case .shortTerm: return loudness.shortTerm
+        case .integrated: return loudness.integrated
+        }
+    }
+
+    func resetLoudness() {
+        loudness.reset()
+        needsDisplay?()
     }
 
     func resetClips() {

@@ -18,6 +18,7 @@ final class TimelineView: NSView {
     var amplitudeBar: ZoomBarView { sideBar.amplitudeBar }
     private let corner = NSView()
     let headers: TrackHeaderColumn
+    let loudnessMeter: LoudnessMeterView
     private let headerCorner = NSView()
     private var observers: Set<AnyCancellable> = []
     private(set) var renderer: TimelineRenderer?
@@ -30,6 +31,7 @@ final class TimelineView: NSView {
         metalView = TimelineMetalView(editor: editor)
         labels = LabelsOverlayView(editor: editor)
         headers = TrackHeaderColumn(editor: editor)
+        loudnessMeter = LoudnessMeterView(editor: editor)
         super.init(frame: .zero)
         wantsLayer = true
         layer?.backgroundColor = Theme.timeline.cgColor
@@ -50,6 +52,7 @@ final class TimelineView: NSView {
         headerCorner.layer?.backgroundColor = Theme.chrome.cgColor
         addSubview(headerCorner)
         addSubview(headers)
+        addSubview(loudnessMeter)
         editor.$multitrack.sink { [weak self] _ in self?.needsLayout = true }.store(in: &observers)
 
         let zoomBar = toolStrip.zoomBar
@@ -87,7 +90,8 @@ final class TimelineView: NSView {
     override func layout() {
         super.layout()
         let b = bounds
-        let w = max(0, b.width - TimelineSideBar.width)
+        let w = max(0, b.width - TimelineSideBar.width - LoudnessMeterView.width)
+        loudnessMeter.frame = NSRect(x: w + TimelineSideBar.width, y: 0, width: LoudnessMeterView.width, height: b.height)
         // The multitrack view puts the header column left of everything that scrolls in time.
         let multi = editor.multitrack
         let x0 = multi ? min(EditorController.headerWidth, w) : 0
@@ -135,10 +139,9 @@ final class TimelineView: NSView {
     @objc private func tick(_ link: CADisplayLink) {
         let t0 = CACurrentMediaTime()
         editor.tick()
-        if editor.multitrack {
-            editor.updateMeters(now: t0)
-            headers.refresh()
-        }
+        editor.updateMeters(now: t0)
+        if editor.multitrack { headers.refresh() }
+        loudnessMeter.refresh()
         guard dirty else { return }
         dirty = false
         metalView.draw()

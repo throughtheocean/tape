@@ -707,3 +707,65 @@ Checklist from the spec:
 6. The pan control is a small slider, not a knob (the spec allows either).
 7. In the multitrack view, a plain vertical scroll scrolls the lanes when they do not fit; otherwise it pans in time as before. Shift scroll (horizontal deltas) always pans.
 8. Nothing from "Not in M6" was needed.
+
+## M7: Loudness meter
+
+Maik's request after M6: a LUFS meter on the right side. His choices: one button switches between momentary, short term and integrated; a column of its own right of the tool bar, in both views; a target line choosable as -14, -16, -23 LUFS or off. The loudness range (LRA) and true peak readings offered alongside were not chosen.
+
+### What was built
+
+TapeCore:
+
+- The playback producer K-weights what goes into each ring slot (the two BS.1770 stages from M4's `Loudness`, per channel, `vDSP_biquad`, state reset when playback restarts). It stores the slot's channel weighted sum of squares and frame count next to the M6 peaks.
+- The audio callback publishes them when the slot plays, so the meter measures what is heard, after master gain and at the playing speed.
+- `LoudnessMeter` bins the energy into 100 ms steps; a chunk crossing a step boundary is split in proportion. It gives:
+  - Momentary: the last 400 ms.
+  - Short term: the last 3 s.
+  - Integrated: every 400 ms block (75 percent overlap) since the last reset, with the -70 LUFS absolute and -10 LU relative gates.
+- `MeterQueue.drain()` also returns the loudness entries in play order.
+
+Tape.app:
+
+- A 56 pt column at the right edge, full height, in the single and the multitrack view. From the top:
+  - A button with the reading's name (Momentary, Short Term, Integrated). A click switches to the next one. View > Loudness Reading does the same.
+  - The value in LUFS, or "-inf" when nothing is measured.
+  - A target button: No target, Target -14, -16 or -23. A click switches to the next one.
+  - A bar from -54 to 0 LUFS with a scale every 6 LU, and the target as an accent line.
+- Bar and value colors with a target set: green within 1 LU of the target, orange above it, and the accent color below it. Without a target, accent.
+- Integrated restarts when playback starts from stopped. A click on the value or the bar resets it, as does View > Reset Integrated Loudness. When playback stops, momentary and short term go to -inf, and integrated keeps its value.
+- The reading and the target are remembered. The default is Short Term with a -14 target.
+- The timeline is 56 pt narrower to make room.
+
+### Tests
+
+5 new tests in `LoudnessMeterTests`, all green (101 in total, 5 opt-in skipped). They play through the real engine in manual rendering mode and feed the meter as the UI does:
+
+- EBU Tech 3341 cases 1 and 2: a stereo 1 kHz sine at -23 and at -33 dBFS per channel reads -23.0 and -33.0 LUFS momentary, short term and integrated (±0.1).
+- EBU Tech 3341 case 3 (-36, -23, -36 dBFS for 10, 60, 10 s): integrated -23.0 ±0.1.
+- Noise with level changes, different on the two channels: integrated matches the offline `Loudness.integrated` that Normalize uses, within 0.1 LU.
+- Chunks that do not line up with the 100 ms steps, stop and reset behaviour, and silence reading -inf.
+
+### Tested by hand
+
+The screen was still locked, so I used the harness. New script `scripts/selftest/m7-loudness.txt` uses two sources generated as 24 bit WAV:
+
+- `/tmp/tape-m7-23.wav`: 20 s of a stereo 1 kHz sine at -23 dBFS per channel.
+- `/tmp/tape-m7-gate.wav`: 3 s at -36, 6 s at -23 and 3 s at -36 dBFS.
+
+Results:
+
+- Stopped before playing: all three readings are -inf.
+- Playing the -23 file: all three read -23.0 after 1 s and stay there. With the -23 target, the value and bar are green (`/tmp/tape-m7-playing.png`).
+- The button cycles Short Term, Integrated, Momentary and back to Short Term.
+- After stop: momentary and short term are -inf, integrated holds -23.0. Reset Integrated Loudness clears it.
+- Playing the gate file: momentary and short term follow the steps. Momentary reads -36.0, then -23.0, then -36.0. Short term rises over 3 s and falls again. Integrated ends at -23.3 (it reads -23.2 during the loud part). The relative gate keeps the quiet parts out; the 0.3 left over comes from the blocks that straddle the level changes in such a short file. The 80 s EBU file in the unit test gives -23.0.
+- The M3, M4, M5 export, M5 layout and M6 scripts were run again and compared to their M6 logs. Edits, exports and compares are identical. The only differences are settings remembered from earlier runs (record device, the export format shown before a script sets it) and the window height.
+
+Not tested: the column in the real window. The offscreen snapshot draws it (`/tmp/tape-m7-meter.png`), but it should be looked at on screen, especially the 9 pt labels.
+
+### Deviations, with reasons
+
+1. The meter measures the transport output, so it also reads shuttle playback at other speeds and process previews. It measures what you hear.
+2. Integrated restarts at every play start from stopped, not only on reset. Without that it would mix earlier passes over other parts of the document. Locating while playing does not restart it.
+3. For a mono session, the one channel is measured with weight 1, as BS.1770 defines. Some meters add 3 dB for mono played on two speakers. Tape does not.
+4. The scale ends at -54 LUFS. Quieter readings show their value but no bar.

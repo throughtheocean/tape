@@ -380,6 +380,12 @@ public final class PlaybackEngine: @unchecked Sendable {
         renderer.metering = true
         let maxSpeed = 8
         let work = SampleBuffer(channelCount: ring.channelCount, capacity: ring.chunkFrames * maxSpeed)
+        // K-weighting of what is played, per channel, for the loudness meter.
+        let kSetup = vDSP_biquad_CreateSetup(Loudness.kWeighting(sampleRate: sessionRate), 2)
+        defer { if let kSetup { vDSP_biquad_DestroySetup(kSetup) } }
+        var kDelays = [[Float]](repeating: [Float](repeating: 0, count: 6), count: ring.channelCount)
+        let kWeights = Loudness.weights(channelCount: ring.channelCount).map(Float.init)
+        var kOut = [Float](repeating: 0, count: ring.chunkFrames)
         var myGeneration: Int64 = -1
         var genStartIndex: Int64 = 0
         var pos: Int64 = 0
@@ -400,6 +406,7 @@ public final class PlaybackEngine: @unchecked Sendable {
                 pos = cmd.start
                 speed = cmd.speed
                 ended = false
+                for c in kDelays.indices { kDelays[c] = [Float](repeating: 0, count: 6) }
             }
             if !cmd.playing || ended {
                 _ = wake.wait(timeout: .now() + .milliseconds(20))
@@ -470,6 +477,17 @@ public final class PlaybackEngine: @unchecked Sendable {
             for (i, peak) in renderer.trackPeaks.prefix(MeterQueue.maxTracks).enumerated() { meterSlot[i] = peak }
             for (i, peak) in renderer.masterPeaks.prefix(MeterQueue.maxMasterChannels).enumerated() {
                 meterSlot[MeterQueue.maxTracks + i] = peak
+            }
+            if let kSetup {
+                var energy: Float = 0
+                for c in 0..<ring.channelCount {
+                    var squares: Float = 0
+                    vDSP_biquad(kSetup, &kDelays[c], ring.channel(slot: slot, channel: c), 1, &kOut, 1, vDSP_Length(n))
+                    vDSP_svesq(kOut, 1, &squares, vDSP_Length(n))
+                    energy += squares * kWeights[c]
+                }
+                meterSlot[MeterQueue.energyIndex] = energy
+                meterSlot[MeterQueue.framesIndex] = Float(n)
             }
             ring.headers[slot] = ChunkRing.Header(generation: myGeneration, startPosition: pos, speed: speed, frames: outFrames)
             ring.writeIndex.store(w + 1)

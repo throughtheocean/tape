@@ -101,6 +101,7 @@ final class SelfTest {
             case "snap": c.timeline.sideBar.snap.toggle()
             case "lanesize": c.timeline.sideBar.laneSize.action()
             case "expand": c.timeline.sideBar.expand.toggle()
+            case "loudness": c.nextLoudnessReading(nil)
             default: write("no button \(args.first ?? "")")
             }
         case "snapshot":
@@ -157,6 +158,13 @@ final class SelfTest {
             master(args, controller: c)
         case "meters":
             meters(c, label: args.joined(separator: " "))
+        case "loudness":
+            c.editor.updateMeters(now: CACurrentMediaTime())
+            c.timeline.loudnessMeter.refresh()
+            let l = c.editor.loudness
+            write(String(format: "loudness %@: momentary %.1f short %.1f integrated %.1f shown %@ %.1f target %.0f",
+                         args.joined(separator: " "), l.momentary, l.shortTerm, l.integrated,
+                         AppSettings.shared.loudnessMode.title, c.editor.loudnessReading, AppSettings.shared.loudnessTarget))
         case "quit":
             flushLog()
             NSApp.terminate(nil)
@@ -170,6 +178,7 @@ final class SelfTest {
         let s = AppSettings.shared
         switch args[0] {
         case "snap": s.snapToZeroCrossing = args[1] == "on"
+        case "target": s.loudnessTarget = Double(args[1]) ?? 0
         case "preroll": RecordController.shared.setPreRoll(Double(args[1]) ?? 10)
         case "container": RecordController.shared.setContainer(AudioContainer(rawValue: args[1]) ?? .wav)
         case "depth": s.recordSampleFormat = SampleFormat(rawValue: args[1]) ?? .int24

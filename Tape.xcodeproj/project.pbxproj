@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		02C0A7E376901EEC6CC220AC /* HardwarePresets in Frameworks */ = {isa = PBXBuildFile; productRef = 61A3A93CCD7D97A66CF2D5BD /* HardwarePresets */; };
 		05953DA9D39E7850470BF191 /* TimelineRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C6E5C15D1404550C948BCF5 /* TimelineRenderer.swift */; };
+		075616A34081AE7E472322DA /* LoudnessMeterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AFCDF14646D1D2926481BD7E /* LoudnessMeterView.swift */; };
 		087C428D740D2D6B23807D13 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E43A217D488DF323AA0EEEA3 /* AppDelegate.swift */; };
 		088A1C6E6CFE006CEA282187 /* SidebarResizeHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6068354885E63A68CCE07E8 /* SidebarResizeHandle.swift */; };
 		0D502DC3A44796A2A0B80B2F /* TransportPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86A48630D1CC175D2F2B4E6D /* TransportPanel.swift */; };
@@ -65,6 +66,7 @@
 		86A48630D1CC175D2F2B4E6D /* TransportPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportPanel.swift; sourceTree = "<group>"; };
 		A973D8F2201B19458E321BDB /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		AB81A6302F5CC78B60F90F2E /* RegionInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionInspector.swift; sourceTree = "<group>"; };
+		AFCDF14646D1D2926481BD7E /* LoudnessMeterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoudnessMeterView.swift; sourceTree = "<group>"; };
 		B6E6CC35575F8BC4EA331E2F /* Benchmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Benchmark.swift; sourceTree = "<group>"; };
 		C32BD636D5C7DA0595E10C3F /* SelfTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelfTest.swift; sourceTree = "<group>"; };
 		C3A45754EF627C1A421E4EA2 /* ZoomBars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomBars.swift; sourceTree = "<group>"; };
@@ -195,6 +197,7 @@
 		E259E68E9D2858BA4DDB4532 /* Timeline */ = {
 			isa = PBXGroup;
 			children = (
+				AFCDF14646D1D2926481BD7E /* LoudnessMeterView.swift */,
 				7CB692CA19EE450EA90C3C42 /* Shaders.metal */,
 				FCA1C440CBE4A34CAB9F6C44 /* TimelineInteraction.swift */,
 				6C6E5C15D1404550C948BCF5 /* TimelineRenderer.swift */,
@@ -297,6 +300,7 @@
 				D5F29CF5DF61F404B2480C7F /* ExportSheet.swift in Sources */,
 				882AE7F859184C1CF43830C2 /* FadeDialog.swift in Sources */,
 				297E4B5A7C85271E55869AC3 /* InspectorPanel.swift in Sources */,
+				075616A34081AE7E472322DA /* LoudnessMeterView.swift in Sources */,
 				322B1BB7B723FB52F7E89611 /* MainMenu.swift in Sources */,
 				F5FA68136B342E6D25633B48 /* MainWindowController.swift in Sources */,
 				9177290C0DB1B1CEDB22B8C6 /* ProcessSession.swift in Sources */,

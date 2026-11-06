@@ -114,6 +114,9 @@ final class EditorController: ObservableObject {
     /// Meter state per track id, and the master channels.
     var trackMeters: [UUID: MeterBallistics] = [:]
     var masterMeters: [MeterBallistics] = [MeterBallistics(), MeterBallistics()]
+    /// Loudness of what is played; integrated restarts when playback starts or on reset.
+    var loudness = LoudnessMeter(sampleRate: 48000)
+    var loudnessWasPlaying = false
 
     static let minSamplesPerPoint = 1.0 / 32
     private var subscriptions: Set<AnyCancellable> = []

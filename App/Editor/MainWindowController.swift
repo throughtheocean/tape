@@ -476,6 +476,13 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         }
     }
 
+    @objc func nextLoudnessReading(_ sender: Any?) {
+        AppSettings.shared.loudnessMode = AppSettings.shared.loudnessMode.next
+        timeline.loudnessMeter.refresh()
+    }
+
+    @objc func resetLoudness(_ sender: Any?) { editor.resetLoudness() }
+
     @objc func toggleSnapToZero(_ sender: Any?) {
         AppSettings.shared.snapToZeroCrossing.toggle()
         editor.needsDisplay?()
@@ -511,6 +518,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             return true
         case #selector(clearRange(_:)):
             return editor.range != nil
+        case #selector(nextLoudnessReading(_:)):
+            item.title = "Loudness Reading: \(AppSettings.shared.loudnessMode.title)"
+            return true
         case #selector(toggleMultitrack(_:)):
             item.state = editor.multitrack ? .on : .off
             return true

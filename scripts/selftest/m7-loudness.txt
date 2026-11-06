@@ -1,0 +1,64 @@
+# M7: loudness meter on what plays. Sources (see docs/report.md, M7):
+# /tmp/tape-m7-23.wav: 20 s stereo 1 kHz sine at -23 dBFS per channel (EBU 3341 case 1, reads -23 LUFS).
+# /tmp/tape-m7-gate.wav: 3 s at -36, 6 s at -23, 3 s at -36 dBFS (the relative gate keeps integrated at -23).
+wait 1
+import /tmp/tape-m7-23.wav
+waitLoaded
+fit
+set target -23
+loudness stopped, nothing measured
+key space
+wait 1
+loudness after 1 s
+wait 1
+loudness after 2 s
+wait 1.5
+loudness after 3.5 s
+wait 1
+loudness after 4.5 s
+snapshot /tmp/tape-m7-playing.png
+button loudness
+loudness switched once
+button loudness
+loudness switched twice
+button loudness
+loudness switched back
+key space
+wait 0.3
+loudness stopped: momentary and short term clear, integrated holds
+snapshot /tmp/tape-m7-meter.png
+menu Reset Integrated Loudness
+loudness after reset
+
+# Gate: play the whole second file in a new document.
+new
+wait 1
+import /tmp/tape-m7-gate.wav
+waitLoaded
+fit
+key space
+wait 1
+loudness 1 s
+wait 1
+loudness 2 s
+wait 1
+loudness 3 s
+wait 1
+loudness 4 s
+wait 1
+loudness 5 s
+wait 1
+loudness 6 s
+wait 1
+loudness 7 s
+wait 1
+loudness 8 s
+wait 1
+loudness 9 s
+wait 1
+loudness 10 s
+wait 1
+loudness 11 s
+wait 1.5
+loudness end
+quit
