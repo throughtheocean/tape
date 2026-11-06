@@ -1,14 +1,14 @@
 import Foundation
 
 /// Peaks and loudness energy of played audio, handed from the render callback to the UI. One entry per played
-/// chunk: `maxTracks` track peaks, `maxMasterChannels` master peaks, then the master's channel weighted sum of
-/// squares of K-weighted samples and the chunk's frame count. Single writer (render callback), single reader
+/// chunk: `maxTracks` track peaks, `maxMasterChannels` master peaks, then per master channel the weighted sum of
+/// squares of K-weighted samples, and the chunk's frame count. Single writer (render callback), single reader
 /// (main thread). A reader that falls more than `capacity` entries behind skips ahead.
 public final class MeterQueue: @unchecked Sendable {
     public static let maxTracks = 64
     public static let maxMasterChannels = 2
     static let energyIndex = maxTracks + maxMasterChannels
-    static let framesIndex = energyIndex + 1
+    static let framesIndex = energyIndex + maxMasterChannels
     public static let stride = framesIndex + 1
     static let capacity = 256
 
@@ -31,18 +31,21 @@ public final class MeterQueue: @unchecked Sendable {
         writeIndex.store(w + 1)
     }
 
-    /// Main thread: the peak maximum of every entry since the last call, and each entry's loudness energy and
-    /// frames in play order, or nil when nothing was played.
-    public func drain() -> (tracks: [Float], master: [Float], loudness: [(energy: Double, frames: Double)])? {
+    /// Main thread: the peak maximum of every entry since the last call, and each entry's loudness energy per
+    /// channel and frames in play order, or nil when nothing was played.
+    public func drain() -> (tracks: [Float], master: [Float], loudness: [(energies: [Double], frames: Double)])? {
         let w = writeIndex.load()
         if w - readIndex > Int64(Self.capacity) { readIndex = w - Int64(Self.capacity) }
         guard w > readIndex else { return nil }
         var out = [Float](repeating: 0, count: Self.energyIndex)
-        var loudness: [(energy: Double, frames: Double)] = []
+        var loudness: [(energies: [Double], frames: Double)] = []
         while readIndex < w {
             let e = entries + Int(readIndex % Int64(Self.capacity)) * Self.stride
             for i in 0..<Self.energyIndex { out[i] = max(out[i], e[i]) }
-            if e[Self.framesIndex] > 0 { loudness.append((Double(e[Self.energyIndex]), Double(e[Self.framesIndex]))) }
+            if e[Self.framesIndex] > 0 {
+                let energies = (0..<Self.maxMasterChannels).map { Double(e[Self.energyIndex + $0]) }
+                loudness.append((energies, Double(e[Self.framesIndex])))
+            }
             readIndex += 1
         }
         return (Array(out[0..<Self.maxTracks]), Array(out[Self.maxTracks..<Self.energyIndex]), loudness)

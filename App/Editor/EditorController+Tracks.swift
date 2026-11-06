@@ -171,9 +171,11 @@ extension EditorController {
     @discardableResult
     func updateMeters(now: Double) -> Bool {
         let peaks = playback.meters.drain()
-        if loudness.sampleRate != sessionRate { loudness = LoudnessMeter(sampleRate: sessionRate) }
+        if loudness.sampleRate != sessionRate || loudness.channels.count != project.channelCount {
+            loudness = ChannelLoudness(sampleRate: sessionRate, channelCount: project.channelCount)
+        }
         if isPlaying, !loudnessWasPlaying { loudness.reset() }
-        for e in peaks?.loudness ?? [] { loudness.add(energy: e.energy, frames: e.frames) }
+        for e in peaks?.loudness ?? [] { loudness.add(energies: e.energies, frames: e.frames) }
         if !isPlaying, loudnessWasPlaying { loudness.clearRunning() }
         loudnessWasPlaying = isPlaying
         let tracks = project.tracks
@@ -197,11 +199,19 @@ extension EditorController {
     }
 
     /// The reading the loudness meter shows, in LUFS (-inf for none).
-    var loudnessReading: Double {
+    var loudnessReading: Double { Self.reading(loudness.total) }
+
+    /// The same reading per channel for the left and right bars; mono shows its one channel in both.
+    var loudnessChannelReadings: [Double] {
+        let c = loudness.channels
+        return [Self.reading(c[0]), Self.reading(c[min(1, c.count - 1)])]
+    }
+
+    private static func reading(_ meter: LoudnessMeter) -> Double {
         switch AppSettings.shared.loudnessMode {
-        case .momentary: return loudness.momentary
-        case .shortTerm: return loudness.shortTerm
-        case .integrated: return loudness.integrated
+        case .momentary: return meter.momentary
+        case .shortTerm: return meter.shortTerm
+        case .integrated: return meter.integrated
         }
     }
 

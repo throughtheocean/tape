@@ -479,14 +479,12 @@ public final class PlaybackEngine: @unchecked Sendable {
                 meterSlot[MeterQueue.maxTracks + i] = peak
             }
             if let kSetup {
-                var energy: Float = 0
-                for c in 0..<ring.channelCount {
+                for c in 0..<min(ring.channelCount, MeterQueue.maxMasterChannels) {
                     var squares: Float = 0
                     vDSP_biquad(kSetup, &kDelays[c], ring.channel(slot: slot, channel: c), 1, &kOut, 1, vDSP_Length(n))
                     vDSP_svesq(kOut, 1, &squares, vDSP_Length(n))
-                    energy += squares * kWeights[c]
+                    meterSlot[MeterQueue.energyIndex + c] = squares * kWeights[c]
                 }
-                meterSlot[MeterQueue.energyIndex] = energy
                 meterSlot[MeterQueue.framesIndex] = Float(n)
             }
             ring.headers[slot] = ChunkRing.Header(generation: myGeneration, startPosition: pos, speed: speed, frames: outFrames)

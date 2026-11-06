@@ -769,3 +769,15 @@ Not tested: the column in the real window. The offscreen snapshot draws it (`/tm
 2. Integrated restarts at every play start from stopped, not only on reset. Without that it would mix earlier passes over other parts of the document. Locating while playing does not restart it.
 3. For a mono session, the one channel is measured with weight 1, as BS.1770 defines. Some meters add 3 dB for mono played on two speakers. Tape does not.
 4. The scale ends at -54 LUFS. Quieter readings show their value but no bar.
+
+### M7 follow up: tool bar left, left and right loudness bars
+
+Maik's feedback: the tool bar with the zoom slider moves to the left, the loudness column stays on the right, and the meter gets a bar for the left and the right channel with still one value.
+
+- The tool bar (vertical zoom, select, blade, snap, and in the multitrack view lane size and expand) is now at the left edge of the timeline. In the multitrack view the track headers follow it, then the lanes. The horizontal zoom stays in the strip under the minimap.
+- The engine now publishes the K-weighted energy per channel. The value is still the combined loudness of both channels. Each bar shows the same reading (momentary, short term or integrated) for its channel alone, measured as if both channels carried that signal. With the same signal on both sides, both bars sit exactly at the value. With a signal on the left only, the left bar shows its level, the right bar is empty, and the value is 3 LU lower. A mono session shows its one channel in both bars.
+- The reading button's label is 1 pt smaller, so "Momentary" fits.
+
+Tests: 102, 5 skipped, 0 failures. The new test plays a -23 dBFS tone on the left only: left bar -23.0, right bar -inf, value -26.0. The EBU tests also check that both bars read the value.
+
+By hand (`m7-loudness` script, with a new left-only part): the -23 dBFS stereo tone reads -23.0 for the value and both bars. The left-only tone reads left -23.0, right -inf, value -26.0. The M6 multitrack script gives the same results as before, including moving a region between lanes, so hit testing follows the moved layout. The only difference is the export format remembered from an earlier run. During the stepped-file part, the target and the reading changed without the script asking. That fits someone clicking the test window. The measured values were not affected.

@@ -161,10 +161,12 @@ final class SelfTest {
         case "loudness":
             c.editor.updateMeters(now: CACurrentMediaTime())
             c.timeline.loudnessMeter.refresh()
-            let l = c.editor.loudness
-            write(String(format: "loudness %@: momentary %.1f short %.1f integrated %.1f shown %@ %.1f target %.0f",
+            let l = c.editor.loudness.total
+            let bars = c.editor.loudnessChannelReadings
+            write(String(format: "loudness %@: momentary %.1f short %.1f integrated %.1f shown %@ %.1f bars %.1f %.1f target %.0f",
                          args.joined(separator: " "), l.momentary, l.shortTerm, l.integrated,
-                         AppSettings.shared.loudnessMode.title, c.editor.loudnessReading, AppSettings.shared.loudnessTarget))
+                         AppSettings.shared.loudnessMode.title, c.editor.loudnessReading, bars[0], bars[1],
+                         AppSettings.shared.loudnessTarget))
         case "quit":
             flushLog()
             NSApp.terminate(nil)

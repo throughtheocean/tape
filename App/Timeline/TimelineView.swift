@@ -90,11 +90,14 @@ final class TimelineView: NSView {
     override func layout() {
         super.layout()
         let b = bounds
-        let w = max(0, b.width - TimelineSideBar.width - LoudnessMeterView.width)
-        loudnessMeter.frame = NSRect(x: w + TimelineSideBar.width, y: 0, width: LoudnessMeterView.width, height: b.height)
-        // The multitrack view puts the header column left of everything that scrolls in time.
+        // Tool bar at the left edge, then in the multitrack view the header column, then everything that scrolls
+        // in time, and the loudness column at the right edge.
+        let side = TimelineSideBar.width
+        let w = max(side, b.width - LoudnessMeterView.width)
+        loudnessMeter.frame = NSRect(x: w, y: 0, width: LoudnessMeterView.width, height: b.height)
         let multi = editor.multitrack
-        let x0 = multi ? min(EditorController.headerWidth, w) : 0
+        let h0 = side
+        let x0 = h0 + (multi ? min(EditorController.headerWidth, w - side) : 0)
         ruler.frame = NSRect(x: x0, y: 0, width: w - x0, height: Self.rulerHeight)
         let track = NSRect(x: x0, y: Self.rulerHeight, width: w - x0, height: max(0, b.height - Self.rulerHeight))
         metalView.frame = track
@@ -102,13 +105,13 @@ final class TimelineView: NSView {
         toolStrip.frame = NSRect(x: x0, y: track.minY + TimelineLayout.minimapHeight + 1,
                                  width: w - x0, height: TimelineLayout.toolStripHeight - 1)
         let barTop = track.minY + TimelineLayout.trackTop
-        corner.frame = NSRect(x: w, y: 0, width: TimelineSideBar.width, height: barTop)
-        sideBar.frame = NSRect(x: w, y: barTop, width: TimelineSideBar.width, height: max(0, b.height - barTop))
+        corner.frame = NSRect(x: 0, y: 0, width: side, height: barTop)
+        sideBar.frame = NSRect(x: 0, y: barTop, width: side, height: max(0, b.height - barTop))
         sideBar.showsLaneTools = multi
         headers.isHidden = !multi
         headerCorner.isHidden = !multi
-        headerCorner.frame = NSRect(x: 0, y: 0, width: x0, height: barTop)
-        headers.frame = NSRect(x: 0, y: barTop, width: x0, height: max(0, b.height - barTop))
+        headerCorner.frame = NSRect(x: h0, y: 0, width: x0 - h0, height: barTop)
+        headers.frame = NSRect(x: h0, y: barTop, width: x0 - h0, height: max(0, b.height - barTop))
         editor.timelineWidth = Double(w - x0)
         editor.timelineHeight = Double(track.height)
         if multi { headers.refresh() }

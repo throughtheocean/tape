@@ -1,6 +1,7 @@
 # M7: loudness meter on what plays. Sources (see docs/report.md, M7):
 # /tmp/tape-m7-23.wav: 20 s stereo 1 kHz sine at -23 dBFS per channel (EBU 3341 case 1, reads -23 LUFS).
 # /tmp/tape-m7-gate.wav: 3 s at -36, 6 s at -23, 3 s at -36 dBFS (the relative gate keeps integrated at -23).
+# /tmp/tape-m7-left.wav: 6 s of the -23 dBFS sine on the left channel only (left bar -23, right bar -inf, value -26).
 wait 1
 import /tmp/tape-m7-23.wav
 waitLoaded
@@ -61,4 +62,16 @@ wait 1
 loudness 11 s
 wait 1.5
 loudness end
+
+# Left only: the bars differ, the value is the combined loudness.
+new
+wait 1
+import /tmp/tape-m7-left.wav
+waitLoaded
+fit
+key space
+wait 3.5
+loudness left only
+snapshot /tmp/tape-m7-left.png
+key space
 quit

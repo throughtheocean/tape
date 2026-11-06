@@ -10,8 +10,9 @@ final class LoudnessMeterTests: XCTestCase {
         return (0..<Int(seconds * rate)).map { Float(a * sin(2 * Double.pi * frequency * Double($0) / rate)) }
     }
 
-    /// Plays `channels` through a manual engine from the start and feeds the meter as the UI does.
-    private func play(_ channels: [[Float]], meter: inout LoudnessMeter) throws {
+    /// Plays `channels` through a manual engine from the start and feeds the meters as the UI does.
+    private func play(_ channels: [[Float]]) throws -> ChannelLoudness {
+        var meters = ChannelLoudness(sampleRate: rate, channelCount: channels.count)
         let id = UUID()
         let frames = channels[0].count
         let region = Region(name: "r", sourceId: id, sourceIn: 0, sourceOut: Int64(frames), position: 0)
@@ -26,28 +27,32 @@ final class LoudnessMeterTests: XCTestCase {
             let n = min(24000, frames - done)
             _ = try engine.renderManual(frames: n)
             done += n
-            for e in engine.meters.drain()?.loudness ?? [] { meter.add(energy: e.energy, frames: e.frames) }
+            for e in engine.meters.drain()?.loudness ?? [] { meters.add(energies: e.energies, frames: e.frames) }
         }
         engine.shutdown()
+        return meters
     }
 
     /// EBU 3341 cases 1 and 2: a stereo 1 kHz sine at -23 and -33 dBFS per channel reads -23 and -33 LUFS.
     func testSteadySineReadsItsLevel() throws {
         for level in [-23.0, -33.0] {
             let tone = sine(dBFS: level, seconds: 20)
-            var meter = LoudnessMeter(sampleRate: rate)
-            try play([tone, tone], meter: &meter)
+            let meters = try play([tone, tone])
+            let meter = meters.total
             XCTAssertEqual(meter.momentary, level, accuracy: 0.1)
             XCTAssertEqual(meter.shortTerm, level, accuracy: 0.1)
             XCTAssertEqual(meter.integrated, level, accuracy: 0.1)
+            for channel in meters.channels {
+                XCTAssertEqual(channel.shortTerm, level, accuracy: 0.1, "identical channels read the combined value")
+                XCTAssertEqual(channel.integrated, level, accuracy: 0.1)
+            }
         }
     }
 
     /// EBU 3341 case 3: -36, -23, -36 dBFS for 10, 60 and 10 s. The relative gate keeps the quiet parts out.
     func testRelativeGate() throws {
         let tone = sine(dBFS: -36, seconds: 10) + sine(dBFS: -23, seconds: 60) + sine(dBFS: -36, seconds: 10)
-        var meter = LoudnessMeter(sampleRate: rate)
-        try play([tone, tone], meter: &meter)
+        let meter = try play([tone, tone]).total
         XCTAssertEqual(meter.integrated, -23, accuracy: 0.1)
         XCTAssertEqual(meter.shortTerm, -36, accuracy: 0.1)
     }
@@ -61,10 +66,17 @@ final class LoudnessMeterTests: XCTestCase {
             return gain * Float.random(in: -1...1, using: &generator)
         }
         let right = left.enumerated().map { $1 * 0.5 + 0.1 * sin(Float($0) * 0.05) }
-        var meter = LoudnessMeter(sampleRate: rate)
-        try play([left, right], meter: &meter)
+        let meter = try play([left, right]).total
         let offline = Loudness.integrated(AudioBuffer(channels: [left, right], sampleRate: rate))
         XCTAssertEqual(meter.integrated, offline, accuracy: 0.1)
+    }
+
+    /// A tone on the left only: the left bar reads the tone's level, the right bar nothing, the value 3 LU less.
+    func testOneSidedChannel() throws {
+        let meters = try play([sine(dBFS: -23, seconds: 5), [Float](repeating: 0, count: Int(rate * 5))])
+        XCTAssertEqual(meters.channels[0].shortTerm, -23, accuracy: 0.1)
+        XCTAssertEqual(meters.channels[1].shortTerm, -.infinity)
+        XCTAssertEqual(meters.total.shortTerm, -26, accuracy: 0.1)
     }
 
     func testChunksSplitAcrossSteps() {

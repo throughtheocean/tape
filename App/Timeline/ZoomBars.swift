@@ -263,7 +263,7 @@ final class TimelineToolStrip: NSView {
     }
 }
 
-/// Vertical bar right of the track: vertical zoom on top, tools below.
+/// Vertical bar at the left edge: vertical zoom on top, tools below.
 @MainActor
 final class TimelineSideBar: NSView {
     static let width: CGFloat = 36
@@ -312,7 +312,7 @@ final class TimelineSideBar: NSView {
         Theme.chrome.setFill()
         bounds.fill()
         Theme.separator.setFill()
-        NSRect(x: 0, y: 0, width: 1, height: bounds.height).fill()
+        NSRect(x: bounds.width - 1, y: 0, width: 1, height: bounds.height).fill()
         NSRect(x: 6, y: zoomHeight + 4, width: bounds.width - 12, height: 1).fill()
     }
 

@@ -95,3 +95,34 @@ public struct LoudnessMeter: Sendable {
         shortTerm = -.infinity
     }
 }
+
+/// The combined loudness of all channels plus one meter per channel. A channel's meter reads as if every channel
+/// carried that channel's signal, so identical channels all read the combined value.
+public struct ChannelLoudness: Sendable {
+    public private(set) var total: LoudnessMeter
+    public private(set) var channels: [LoudnessMeter]
+
+    public init(sampleRate: Double, channelCount: Int) {
+        total = LoudnessMeter(sampleRate: sampleRate)
+        channels = Array(repeating: LoudnessMeter(sampleRate: sampleRate), count: max(1, channelCount))
+    }
+
+    public var sampleRate: Double { total.sampleRate }
+
+    /// `energies` holds each channel's weighted sum of squares over `frames` frames; extra entries are ignored.
+    public mutating func add(energies: [Double], frames: Double) {
+        let count = min(energies.count, channels.count)
+        total.add(energy: energies.prefix(count).reduce(0, +), frames: frames)
+        for c in 0..<count { channels[c].add(energy: energies[c] * Double(channels.count), frames: frames) }
+    }
+
+    public mutating func reset() {
+        total.reset()
+        for c in channels.indices { channels[c].reset() }
+    }
+
+    public mutating func clearRunning() {
+        total.clearRunning()
+        for c in channels.indices { channels[c].clearRunning() }
+    }
+}
