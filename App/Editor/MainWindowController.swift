@@ -70,7 +70,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         sidebarButton.target = self
         sidebarButton.action = #selector(toggleInspector(_:))
 
-        let content = NSView()
+        let content = FileDropView()
+        content.onDrop = { [weak self] urls, point in self?.dropFiles(urls, at: point) ?? false }
+        content.canDrop = { RecordController.shared.isRecording == false }
         content.wantsLayer = true
         content.layer?.backgroundColor = Theme.chrome.cgColor
         for v in [sidebar, sidebarLine, transport, timeline, sidebarHandle] as [NSView] {
@@ -285,6 +287,37 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         } catch {
             showError(error.localizedDescription)
         }
+    }
+
+    /// Audio dropped on the window. An empty document takes the files from the start. In the multitrack view each
+    /// file gets a new track at the bottom, starting where it was dropped over the lanes (else at 0). The single view adds them
+    /// at the end of the selected track, as Import does. Tape projects open in their own window.
+    @discardableResult
+    func dropFiles(_ urls: [URL], at windowPoint: NSPoint?) -> Bool {
+        let packages = urls.filter { $0.pathExtension.lowercased() == TapePackage.fileExtension }
+        let audio = urls.filter { $0.pathExtension.lowercased() != TapePackage.fileExtension }
+        if !packages.isEmpty { (NSApp.delegate as? AppDelegate)?.openURLs(packages) }
+        guard !audio.isEmpty else { return !packages.isEmpty }
+        guard editor.multitrack else {
+            importAudio(urls: audio)
+            return true
+        }
+        var position: Int64 = 0
+        if !tapeDocument.project.regions.isEmpty, let windowPoint {
+            let metal = timeline.metalView
+            let p = metal.convert(windowPoint, from: nil)
+            if metal.bounds.contains(p) { position = Int64(max(0, editor.frame(forX: Double(p.x)))) }
+        }
+        do {
+            let ids = try tapeDocument.importAudioAsTracks(audio, position: position)
+            if let first = ids.first {
+                editor.selectTrack(first, header: true)
+                editor.revealSelectedLane()
+            }
+        } catch {
+            showError(error.localizedDescription)
+        }
+        return true
     }
 
     func showError(_ message: String) {

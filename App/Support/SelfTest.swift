@@ -67,6 +67,11 @@ final class SelfTest {
             app?.newDocument(nil)
         case "import":
             c.importAudio(urls: args.map { URL(fileURLWithPath: $0) })
+        case "drop":
+            // drop <x in the track view, or f<frame>> <file>...: as a Finder drop at that point over the lanes.
+            guard let first = args.first else { break }
+            let point = c.timeline.metalView.convert(NSPoint(x: x(first, c.editor), y: c.timeline.metalView.bounds.midY), to: nil)
+            write("drop accepted \(c.dropFiles(args.dropFirst().map { URL(fileURLWithPath: $0) }, at: point))")
         case "wait":
             try await Task.sleep(nanoseconds: UInt64((Double(args.first ?? "1") ?? 1) * 1e9))
         case "waitLoaded":

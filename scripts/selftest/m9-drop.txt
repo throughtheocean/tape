@@ -1,0 +1,26 @@
+# M9: audio files dropped on the window. Sources: /tmp/tape-m6-a.wav (4 s) and /tmp/tape-m6-b.wav (3 s), see M6.
+# "drop" calls the same code as a Finder drop at a point over the lanes.
+wait 1
+drop 100 /tmp/tape-m6-a.wav
+waitLoaded
+log single view, empty document: the file opens at 0 on track 1
+drop 100 /tmp/tape-m6-b.wav
+waitLoaded
+log single view with content: added at the end of the selected track
+
+new
+wait 1
+key cmd+shift+m
+drop 300 /tmp/tape-m6-a.wav /tmp/tape-m6-b.wav
+waitLoaded
+fit
+log multitrack, empty document: track 1 and a new track 2, both at 0, named after the files
+drop f96000 /tmp/tape-m6-b.wav
+waitLoaded
+log dropped at 2 s: a new track 3 at the bottom, region at frame 96000
+snapshot /tmp/tape-m9-drop.png
+key cmd+z
+log undo removes the new track and its region in one step
+key cmd+shift+z
+log redo
+quit

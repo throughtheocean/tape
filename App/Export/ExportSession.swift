@@ -31,7 +31,7 @@ final class ExportSession: ObservableObject {
     @Published var scope: ExportScopeKind
     @Published var pattern: String
     @Published var stemPattern: String
-    /// First `{index}` number for Each Region and Stems.
+    /// First `{index}` number for Each Region. Stems always count from 1, by track position.
     @Published var startIndex: Int
     @Published private(set) var preset: ExportPreset?
     @Published private(set) var isExporting = false
@@ -106,7 +106,7 @@ final class ExportSession: ObservableObject {
         let names = Dictionary(editor.project.tracks.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
         return Exporter.jobs(list: editor.document.editList(), scope: coreScope, directory: directory, fileName: fileName,
                              pattern: scope == .stems ? stemPattern : pattern, documentName: documentName, date: Date(),
-                             settings: settings, trackNames: names, startIndex: max(0, startIndex))
+                             settings: settings, trackNames: names, startIndex: scope == .eachRegion ? max(0, startIndex) : 1)
     }
 
     /// What the export would write, for the summary line and the preset limits.
@@ -222,7 +222,7 @@ final class ExportSession: ObservableObject {
                 status = String(format: "Exported %d file%@ in %.1f s", urls.count, urls.count == 1 ? "" : "s",
                                 Date().timeIntervalSince(started))
                 lastExported = urls
-                if scope.writesFolder, !jobs.isEmpty { editor.exportStartIndex = max(0, startIndex) + jobs.count }
+                if scope == .eachRegion, !jobs.isEmpty { editor.exportStartIndex = max(0, startIndex) + jobs.count }
                 completion(true)
             case let .failure(error):
                 if case TapeError.cancelled = error { status = "Cancelled" } else { status = error.localizedDescription }

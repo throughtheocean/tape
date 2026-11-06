@@ -117,7 +117,7 @@ final class EditorController: ObservableObject {
     /// Loudness of what is played; integrated restarts when playback starts or on reset.
     var loudness = ChannelLoudness(sampleRate: 48000, channelCount: 2)
     var loudnessWasPlaying = false
-    /// First `{index}` number offered for Each Region and Stems; numbered exports continue it.
+    /// First `{index}` number offered for Each Region; each such export continues it.
     var exportStartIndex = 1
 
     static let minSamplesPerPoint = 1.0 / 32

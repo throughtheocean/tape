@@ -148,6 +148,43 @@ final class TapeDocument: ObservableObject {
 
     // MARK: Import
 
+    /// Imports each file onto a new track at the bottom, named after the file, starting at `position`.
+    /// In a document without regions the first file goes onto the first track instead. One undo step.
+    @discardableResult
+    func importAudioAsTracks(_ urls: [URL], position: Int64) throws -> [UUID] {
+        let refs = try sourceRefs(urls)
+        guard !refs.isEmpty else { return [] }
+        var trackIDs: [UUID] = []
+        let name = refs.count == 1 ? "Import \(refs[0].name) as Track" : "Import \(refs.count) Files as Tracks"
+        apply(name) { p in
+            if p.sessionRate == nil {
+                p.sessionRate = refs[0].sampleRate
+                p.channelCount = refs[0].channelCount
+            }
+            let rate = p.sessionRate!
+            let reuseFirst = p.regions.isEmpty
+            for (i, ref) in refs.enumerated() {
+                let title = (ref.name as NSString).deletingPathExtension
+                let trackId = i == 0 && reuseFirst ? p.tracks[0].id : EditOperations.addTrack(&p)
+                if let t = p.trackIndex(trackId) { p.tracks[t].name = title }
+                p.sources.append(ref)
+                p.regions.append(Region(name: title, trackId: trackId, sourceId: ref.id, sourceIn: 0,
+                                        sourceOut: ref.sessionFrameCount(sessionRate: rate), position: max(0, position)))
+                trackIDs.append(trackId)
+            }
+        }
+        return trackIDs
+    }
+
+    private func sourceRefs(_ urls: [URL]) throws -> [SourceRef] {
+        try urls.map { url in
+            let info = try AudioFileInfo(url: url)
+            return SourceRef(name: url.lastPathComponent,
+                             location: .external(path: url.path, bookmark: TapePackage.bookmark(for: url)),
+                             sampleRate: info.sampleRate, channelCount: info.channelCount, frameCount: info.frameCount)
+        }
+    }
+
     /// Imports at the document end, onto `track` (default: the first track).
     func importAudio(_ urls: [URL], track: UUID? = nil) throws {
         var refs: [SourceRef] = []

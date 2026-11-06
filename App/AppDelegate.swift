@@ -109,7 +109,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         openURLs(panel.urls)
     }
 
-    private func openURLs(_ urls: [URL]) {
+    func openURLs(_ urls: [URL]) {
         let packages = urls.filter { $0.pathExtension.lowercased() == TapePackage.fileExtension }
         let audio = urls.filter { $0.pathExtension.lowercased() != TapePackage.fileExtension }
         packages.forEach { open(packageAt: $0) }

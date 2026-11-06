@@ -829,3 +829,48 @@ Regression:
 
 1. The track height is one height for all lanes, as in M6. The Expand button still makes the selected lane fill the view. Per-track heights would need a drag handle per lane; that idea is in `docs/v2.md`.
 2. The start number is not saved with the document. It lives as long as the window is open.
+
+## M9: Drop audio files on the window
+
+Maik's feedback: "the app needs to be able to have drag input enabled, when i drag on an empty app an audio file it opens the audio file, and on multi it creates a new track"
+
+### What was built
+
+The whole window accepts audio files and Tape projects dragged from the Finder. Other files are refused, as is any drop while recording. Dropping on the Dock icon already worked since M1 and is unchanged.
+
+- Empty document, either view: the files open in it from the start, as with Import.
+- Multitrack view: each file gets a new track at the bottom, named after the file. The region starts where the file was released over the lanes, or at 0 when it lands elsewhere in the window. In an empty document the first file uses Track 1, which takes the file's name, and every other file gets a new track starting at 0. One drop is one undo step ("Import x as Track" or "Import n Files as Tracks"). The first new track is selected and scrolled into view.
+- Single view with content: the files go to the end of the selected track, the same as Command I.
+- Dropped Tape projects open in their own window.
+
+### Fix to M8
+
+The per-document counter for numbered exports also continued for stems. A second stems export in the same document was numbered 04 to 06 instead of 01 to 03. Stems now always count from 1, by track position. The Start at field and the continued counting apply only to Each Region.
+
+### Tests
+
+103 TapeCore tests, 5 skipped, 0 failures (no change to TapeCore in M9).
+
+### Tested by hand
+
+New script `scripts/selftest/m9-drop.txt`. Its `drop` command calls the same code as a Finder drop at a point over the lanes.
+
+- Single view, empty document: `tape-m6-a` opens at 0.
+- Single view with content: `tape-m6-b` follows at 4 s on the same track.
+- Multitrack, empty document, both files dropped together: Track 1 becomes `tape-m6-a` and a new Track 2 `tape-m6-b`, both at 0.
+- Dropped at 2 s: a new Track 3 at the bottom, with the region at frame 96000.
+- Undo removes the new track and its region in one step. Redo brings them back.
+- Snapshot `/tmp/tape-m9-drop.png` shows the three tracks named after the files.
+
+Regression:
+
+- The M6 multitrack script gives the same results. The only difference is the inspector being hidden, a setting remembered from an earlier run.
+- After the stems fix, from emptied output folders: M6 stems 01 to 03 both times, M8 07 to 09 then 01 to 03, M5 FLAC 01 to 03 and Morphagene mg1 to mg3.
+
+Not tested: a real drag from the Finder. The screen is in use, and the harness cannot create one. Accepting only audio and Tape files, the copy cursor, and refusing drops while recording all need a check by hand.
+
+### Deviations, with reasons
+
+1. New tracks from a drop go to the bottom, not after the selected track as Add Track does. Several drops in a row then stay in the order they were made.
+2. A file dropped on a track lane does not go onto that track. In the multitrack view a drop always makes new tracks, as asked. Moving a region onto an existing track works by dragging the region afterwards.
+3. Drop positions do not snap. Snap to zero crossing works within a region and does not apply to where a new region starts.

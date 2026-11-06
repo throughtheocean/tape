@@ -75,9 +75,8 @@ struct ExportSheet: View {
                 row("File names") {
                     TextField("", text: $session.stemPattern)
                         .disabled(session.isPatternLocked || session.isExporting)
-                        .help("Tokens: {name} document, {track} track name, {index} or {index:02} number, {date} as YYMMDD")
+                        .help("Tokens: {name} document, {track} track name, {index} or {index:02} track position, {date} as YYMMDD")
                 }
-                startRow
             }
             Text(session.summary)
                 .font(.system(size: 11))
@@ -118,7 +117,7 @@ struct ExportSheet: View {
                     .multilineTextAlignment(.trailing)
                 Stepper("", value: $session.startIndex, in: 0...9999)
                     .labelsHidden()
-                if !(session.scope == .stems ? session.stemPattern : session.pattern).contains("{index") {
+                if !session.pattern.contains("{index") {
                     Text("Add {index:02} to the names to number them.")
                         .font(.system(size: 11))
                         .foregroundStyle(Color.tapeSecondary)

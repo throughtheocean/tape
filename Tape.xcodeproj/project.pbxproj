@@ -41,6 +41,7 @@
 		F75879D83194554262292096 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A973D8F2201B19458E321BDB /* AppSettings.swift */; };
 		F7CEBBFF57F50815FDD3D38F /* RegionInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB81A6302F5CC78B60F90F2E /* RegionInspector.swift */; };
 		F900097B1A73E9B82EC29D95 /* TapeCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7F00CDFB6F11376B32650AE9 /* TapeCore */; };
+		FC08085114D7CC77C9B58324 /* FileDropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39EC6222798C2EB69184CE3 /* FileDropView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -78,6 +79,7 @@
 		E61EAC9D5F540A45ECD293DA /* ProcessSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessSheet.swift; sourceTree = "<group>"; };
 		EBA048A20C51244AA1C1FB0A /* FadeDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FadeDialog.swift; sourceTree = "<group>"; };
 		F240DEBE3473C566A1142715 /* ExportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportSheet.swift; sourceTree = "<group>"; };
+		F39EC6222798C2EB69184CE3 /* FileDropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileDropView.swift; sourceTree = "<group>"; };
 		F8B0B74AB56E1FE9C1A558BF /* ExportSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportSession.swift; sourceTree = "<group>"; };
 		FCA1C440CBE4A34CAB9F6C44 /* TimelineInteraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineInteraction.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -147,6 +149,7 @@
 				6E4C33FC83E2C6915F8C1C3F /* EditorController.swift */,
 				097E061F1D5376DA631D28B4 /* EditorController+Edit.swift */,
 				673E0BA64A4334F7B01EBAF2 /* EditorController+Tracks.swift */,
+				F39EC6222798C2EB69184CE3 /* FileDropView.swift */,
 				DD71093FAD9D8D8AF8651895 /* MainWindowController.swift */,
 				E6068354885E63A68CCE07E8 /* SidebarResizeHandle.swift */,
 			);
@@ -299,6 +302,7 @@
 				F43FC7F71D0E43740C47CEA3 /* ExportSession.swift in Sources */,
 				D5F29CF5DF61F404B2480C7F /* ExportSheet.swift in Sources */,
 				882AE7F859184C1CF43830C2 /* FadeDialog.swift in Sources */,
+				FC08085114D7CC77C9B58324 /* FileDropView.swift in Sources */,
 				297E4B5A7C85271E55869AC3 /* InspectorPanel.swift in Sources */,
 				075616A34081AE7E472322DA /* LoudnessMeterView.swift in Sources */,
 				322B1BB7B723FB52F7E89611 /* MainMenu.swift in Sources */,
