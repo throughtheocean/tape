@@ -874,3 +874,9 @@ Not tested: a real drag from the Finder. The screen is in use, and the harness c
 1. New tracks from a drop go to the bottom, not after the selected track as Add Track does. Several drops in a row then stay in the order they were made.
 2. A file dropped on a track lane does not go onto that track. In the multitrack view a drop always makes new tracks, as asked. Moving a region onto an existing track works by dragging the region afterwards.
 3. Drop positions do not snap. Snap to zero crossing works within a region and does not apply to where a new region starts.
+
+### M9 addition: app icon
+
+Maik's icons from `docs/261106-tape-icon-02` (bright and dark variants). The dark one is now the app icon: `App/Assets.xcassets/AppIcon.appiconset`, built into `AppIcon.icns` and `Assets.car`.
+
+Deviation: I first put both variants into one icon set, bright by default and dark for dark mode. The asset compiler ignores dark variants for a Mac app icon ("10 unassigned children"), and `Assets.car` held only one set. On macOS 26 an icon that follows the appearance must be an Icon Composer `.icon` file built from separate layers (background and waveform), not from finished images. The dark icon was chosen because Tape's interface is dark only. The bright one stays in `docs` and can replace it by copying its icon set over.

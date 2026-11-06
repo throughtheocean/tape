@@ -40,6 +40,7 @@
 		F5FA68136B342E6D25633B48 /* MainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD71093FAD9D8D8AF8651895 /* MainWindowController.swift */; };
 		F75879D83194554262292096 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A973D8F2201B19458E321BDB /* AppSettings.swift */; };
 		F7CEBBFF57F50815FDD3D38F /* RegionInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB81A6302F5CC78B60F90F2E /* RegionInspector.swift */; };
+		F83A22AFC16402575D014989 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4FCFBE893A13F42177DD57C6 /* Assets.xcassets */; };
 		F900097B1A73E9B82EC29D95 /* TapeCore in Frameworks */ = {isa = PBXBuildFile; productRef = 7F00CDFB6F11376B32650AE9 /* TapeCore */; };
 		FC08085114D7CC77C9B58324 /* FileDropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F39EC6222798C2EB69184CE3 /* FileDropView.swift */; };
 /* End PBXBuildFile section */
@@ -53,6 +54,7 @@
 		3B0B97B8EB63527C26C8D04B /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		48E068AC01D2C3FDC47FE76D /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		4949DA3BBA85DBD18BCB8AC4 /* InspectorPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorPanel.swift; sourceTree = "<group>"; };
+		4FCFBE893A13F42177DD57C6 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5090E27854184DB6870B8F0C /* ProcessSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessSession.swift; sourceTree = "<group>"; };
 		5EB62817DE4B97642623DF54 /* MainMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainMenu.swift; sourceTree = "<group>"; };
 		673E0BA64A4334F7B01EBAF2 /* EditorController+Tracks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EditorController+Tracks.swift"; sourceTree = "<group>"; };
@@ -181,6 +183,7 @@
 			isa = PBXGroup;
 			children = (
 				E43A217D488DF323AA0EEEA3 /* AppDelegate.swift */,
+				4FCFBE893A13F42177DD57C6 /* Assets.xcassets */,
 				83A67B8D6E50859C24A6AE7B /* Info.plist */,
 				3B0B97B8EB63527C26C8D04B /* main.swift */,
 				5EB62817DE4B97642623DF54 /* MainMenu.swift */,
@@ -236,6 +239,7 @@
 			buildConfigurationList = 3E4AAA3FCFA6B24B8BCDA8F7 /* Build configuration list for PBXNativeTarget "Tape" */;
 			buildPhases = (
 				B6890BEACE963826787A4F65 /* Sources */,
+				CBDC65E711C75246AFEE8B98 /* Resources */,
 				91A9C8652561059F7CC289D2 /* Frameworks */,
 			);
 			buildRules = (
@@ -287,6 +291,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		CBDC65E711C75246AFEE8B98 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F83A22AFC16402575D014989 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		B6890BEACE963826787A4F65 /* Sources */ = {
