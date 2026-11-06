@@ -102,6 +102,33 @@ final class MultitrackTests: XCTestCase {
         for (x, y) in zip(render(list)[1], solo[1]) { XCTAssertEqual(x, y, accuracy: 1e-6) }
     }
 
+    /// "Only" plays the isolated track alone with its own gain and pan, even when muted or not soloed, and leaves
+    /// the flags alone; an export of a list with the flag set equals one without it.
+    func testOnlyIsolatesPlaybackButNotExport() throws {
+        var (list, a, b) = twoTracks()
+        let ga = Float(pow(10, -2.0 / 20)), gb = Float(pow(10, 1.5 / 20))
+        list.tracks[0].solo = true
+        list.tracks[1].mute = true
+        let flags = list.tracks
+        let only = list.isolating(list.tracks[1].id)
+        let out = render(only)
+        for i in 0..<n { XCTAssertEqual(out[0][i], b[i] * gb, accuracy: 1e-6) }
+        XCTAssertEqual(only.tracks, flags)
+        XCTAssertEqual(only.with(regions: only.regions).isolatedTrack, list.tracks[1].id, "previews keep the isolation")
+
+        let dir = TestAudio.tempDirectory()
+        let settings = ExportSettings(container: .caf, sampleFormat: .float32)
+        func export(_ l: EditList, _ name: String) throws -> [[Float]] {
+            let jobs = Exporter.jobs(list: l, scope: .mix, directory: dir, fileName: name, pattern: "", documentName: "",
+                                     date: Date(), settings: settings)
+            try Exporter.export(jobs, sessionRate: 48000, settings: settings)
+            return try TestAudio.read(jobs[0].url)
+        }
+        let plain = try export(list, "plain"), isolated = try export(only, "only")
+        XCTAssertEqual(plain, isolated)
+        for i in 0..<n { XCTAssertEqual(plain[0][i], a[i] * ga, accuracy: 1e-6, "export follows solo on A") }
+    }
+
     func testSilentGainIsSilence() {
         var (list, _, _) = twoTracks()
         list.tracks[0].gainDB = Track.silentDB

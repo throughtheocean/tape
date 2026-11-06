@@ -71,7 +71,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         sidebarButton.action = #selector(toggleInspector(_:))
 
         let content = FileDropView()
-        content.onDrop = { [weak self] urls, point in self?.dropFiles(urls, at: point) ?? false }
+        content.onDrop = { [weak self] urls, point, option in self?.dropFiles(urls, at: point, keepBoth: option) ?? false }
         content.canDrop = { RecordController.shared.isRecording == false }
         content.wantsLayer = true
         content.layer?.backgroundColor = Theme.chrome.cgColor
@@ -289,30 +289,36 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         }
     }
 
-    /// Audio dropped on the window. An empty document takes the files from the start. In the multitrack view each
-    /// file gets a new track at the bottom, starting where it was dropped over the lanes (else at 0). The single view adds them
-    /// at the end of the selected track, as Import does. Tape projects open in their own window.
+    /// Audio dropped on the window. An empty document takes the files from the start (the multitrack view gives
+    /// each file a track). Dropped over a lane, the files go onto that track at the drop point, snapped like a
+    /// region drag, covering what lies under them unless `keepBoth` (Option). Below the last lane they get new tracks
+    /// at the bottom. Elsewhere in the single view they go to the end of the shown track, as Import does.
+    /// Tape projects open in their own window.
     @discardableResult
-    func dropFiles(_ urls: [URL], at windowPoint: NSPoint?) -> Bool {
+    func dropFiles(_ urls: [URL], at windowPoint: NSPoint?, keepBoth: Bool = false) -> Bool {
         let packages = urls.filter { $0.pathExtension.lowercased() == TapePackage.fileExtension }
         let audio = urls.filter { $0.pathExtension.lowercased() != TapePackage.fileExtension }
         if !packages.isEmpty { (NSApp.delegate as? AppDelegate)?.openURLs(packages) }
         guard !audio.isEmpty else { return !packages.isEmpty }
-        guard editor.multitrack else {
-            importAudio(urls: audio)
-            return true
-        }
-        var position: Int64 = 0
-        if !tapeDocument.project.regions.isEmpty, let windowPoint {
-            let metal = timeline.metalView
-            let p = metal.convert(windowPoint, from: nil)
-            if metal.bounds.contains(p) { position = Int64(max(0, editor.frame(forX: Double(p.x)))) }
-        }
+        let metal = timeline.metalView
+        let p = windowPoint.map { metal.convert($0, from: nil) }
+        let inLanes = p.map { metal.bounds.contains($0) && Double($0.y) >= editor.laneViewport.top && Double($0.y) < editor.laneViewport.bottom } ?? false
+        let frame = p.map { Int64(max(0, editor.frame(forX: Double($0.x)).rounded())) } ?? 0
         do {
-            let ids = try tapeDocument.importAudioAsTracks(audio, position: position)
-            if let first = ids.first {
-                editor.selectTrack(first, header: true)
-                editor.revealSelectedLane()
+            if !tapeDocument.project.regions.isEmpty, inLanes, let p, let lane = editor.lane(atY: Double(p.y)) {
+                let editor = editor
+                try tapeDocument.importAudio(audio, onto: lane.track.id, start: { editor.snappedDrop(frame, lengths: $0) },
+                                             overwrite: !keepBoth)
+                editor.selectTrack(lane.track.id, header: false)
+            } else if editor.multitrack {
+                let empty = tapeDocument.project.regions.isEmpty
+                let ids = try tapeDocument.importAudioAsTracks(audio, position: !empty && p.map { metal.bounds.contains($0) } == true ? frame : 0)
+                if let first = ids.first {
+                    editor.selectTrack(first, header: true)
+                    editor.revealSelectedLane()
+                }
+            } else {
+                try tapeDocument.importAudio(audio, track: editor.selectedTrackID)
             }
         } catch {
             showError(error.localizedDescription)
@@ -482,8 +488,11 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     // MARK: Tracks
 
     @objc func toggleMultitrack(_ sender: Any?) { editor.multitrack.toggle() }
+    @objc func toggleOnlyTrack(_ sender: Any?) { editor.onlyTrack.toggle() }
     @objc func addTrack(_ sender: Any?) { editor.addTrack() }
     @objc func cycleLaneHeight(_ sender: Any?) { editor.cycleLaneHeight() }
+    @objc func selectPreviousTrack(_ sender: Any?) { editor.selectAdjacentTrack(by: -1) }
+    @objc func selectNextTrack(_ sender: Any?) { editor.selectAdjacentTrack(by: 1) }
     @objc func toggleExpandTrack(_ sender: Any?) { editor.expandSelected.toggle() }
 
     /// Removes the selected track, asking first when it holds regions.
@@ -554,11 +563,19 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         case #selector(nextLoudnessReading(_:)):
             item.title = "Loudness Reading: \(AppSettings.shared.loudnessMode.title)"
             return true
+        case #selector(toggleOnlyTrack(_:)):
+            item.state = editor.onlyTrack ? .on : .off
+            return !editor.multitrack
         case #selector(toggleMultitrack(_:)):
             item.state = editor.multitrack ? .on : .off
             return true
         case #selector(addTrack(_:)):
             return !RecordController.shared.isRecording
+        case #selector(selectPreviousTrack(_:)):
+            return (editor.project.trackIndex(editor.selectedTrackID) ?? 0) > 0 && !RecordController.shared.isRecording
+        case #selector(selectNextTrack(_:)):
+            return (editor.project.trackIndex(editor.selectedTrackID) ?? 0) < editor.project.tracks.count - 1
+                && !RecordController.shared.isRecording
         case #selector(removeTrack(_:)):
             return editor.project.tracks.count > 1 && !RecordController.shared.isRecording
         case #selector(cycleLaneHeight(_:)):

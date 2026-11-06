@@ -880,3 +880,61 @@ Not tested: a real drag from the Finder. The screen is in use, and the harness c
 Maik's icons from `docs/261106-tape-icon-02` (bright and dark variants). The dark one is now the app icon: `App/Assets.xcassets/AppIcon.appiconset`, built into `AppIcon.icns` and `Assets.car`.
 
 Deviation: I first put both variants into one icon set, bright by default and dark for dark mode. The asset compiler ignores dark variants for a Mac app icon ("10 unassigned children"), and `Assets.car` held only one set. On macOS 26 an icon that follows the appearance must be an Icon Composer `.icon` file built from separate layers (background and waveform), not from finished images. The dark icon was chosen because Tape's interface is dark only. The bright one stays in `docs` and can replace it by copying its icon set over.
+
+## M10a: Only, drop targets, overlap, copy, track keys, process scope
+
+Spec: "Tape M10: Only, overdub, magnetic timeline, connected regions", part M10a and section 0.
+
+### Section 0
+
+- The bright icon set and both icon sources (SVG and 1024 PNG) are copied to `docs/assets/` for the website. Maik's folder `docs/261106-tape-icon-02` is left as it was and is not committed.
+- `docs/datenmodell.md` describes the document, the renderer, the fixed pan law (constant power, -3 dB at centre) and the track output (stereo; mono regions pan, stereo regions balance). The spec names this file, so it does not follow the `YYMMDD-name-01` pattern.
+- The pan law idea is removed from `docs/v2.md`.
+
+### What was built
+
+Each change below is one undo step.
+
+- **Only**: a toggle next to the track popup in the transport, also View > Hear Only This Track (Option S). It is accent coloured and bold while on. Playback hears the shown track alone, with its gain and pan, and the master applies. The mute and solo flags are not touched, nothing is saved, and export and stems ignore it. It follows a change of the shown track (popup or Up/Down), clears when switching to the multitrack view, and is disabled there.
+- **Drop targets**: a file dropped over a lane goes onto that track at the drop point, in both views. It snaps like a region drag: one of its edges lands on a region edge on any visible lane, or on the playhead, within 8 points. Several files go one after another. Dropped below the last lane in the multitrack view, the files get new tracks as in M9; on an empty document, as in M9. In the single view, a drop outside the lane (transport, inspector) adds at the end of the shown track, as Import does.
+- **Overlap on one track**: a plain drag or drop trims what lies under it on the same track (Final Cut style). A region that is covered in the middle is split in two, a region fully covered is removed, and an edge that is cut loses its fade. With Option held, both stay and they sum. Overlaps on different tracks always sum.
+- **Option drag** copies the selected regions, also onto another track. The copies keep every field except id (and trackId when moved to another track). The hint reads "Copy", and the undo step is "Copy".
+- **Snapping across lanes**: region edges on every lane are snap targets in the multitrack view (already the case since M6; the drop uses the same targets).
+- **Up/Down arrows**: Track > Select Previous Track / Select Next Track. The track header is highlighted and scrolled into view. Record, Only and Import follow the selected track.
+- **Ripple scope**: Delete ripples the region's own track only (already the case since M6).
+- **Process scope**: with a range set, the sheet processes the selected track's regions in the range. A checkbox "All tracks in range" switches to every track. The summary line names the track. If the selected track has nothing in the range, the sheet opens with the checkbox on. Changing the checkbox restarts a running preview with the new targets.
+
+### Tests
+
+108 TapeCore tests, 5 skipped, 0 failures. New:
+
+- `testOnlyIsolatesPlaybackButNotExport`: with B isolated, the output is B alone with its gain, even with A soloed and B muted. The flags are unchanged, and an export of the isolated list equals the plain one.
+- `testCopyKeepsEveryFieldButIdAndTrack`: a copy keeps name, source, in, out, position, gain and both fades (length, shape, blend). Copied to another track, only id and trackId differ.
+- `testOverwriteTrimsSplitsAndRemovesOnlyOnItsTrack`: trimmed start and end, a split in the middle, a fully covered region removed, the cut edges without fades, and the regions on another track untouched.
+- `testDropOverLaneTrimsOrKeeps`: a drop snaps to a region edge on another lane; a plain drop trims, an Option drop keeps both.
+- `testOverlapOnOneTrackSums`: two regions overlapping on one track render as their sum.
+
+### Tested by hand
+
+New script `scripts/selftest/m10a-only-drop-overlap.txt`, with A (4 s) on track 1 and B (3 s) on track 2:
+
+- Only on track 1: playback -5.99 LUFS (A alone), export mix -5.65 LUFS (both). Down: track 2 shown, Only follows, -15.92 LUFS (B alone). Mute and solo stay false. The multitrack view clears Only.
+- Option drop of B over lane 1 at frame 143500: snapped to 144000 (the end of B on track 2), A untouched. Undo removes it in one step.
+- Plain drop at the same point: A trimmed to 0..144000.
+- Drop below the last lane at 2 s: a new track 3 at 96000.
+- Option drag of A from track 1 to track 2: the copy at 200000 on track 2, A stays, undo "Copy".
+- Plain drag of B onto track 1 at 48000: A trimmed to 0..48000, undo "Move".
+- Process sheet on a range 24000..120000 with track 2 selected: one target (B), "1 region on tape-m6-b inside the range". With the checkbox: two targets.
+- Single view, track 2 shown: Option drop at 100000 lands on track 2.
+- Arrow keys: a real key event matches the menu items. The test harness then performs them, because a background run has no key window to send the action to.
+
+Regression (M3, M4, M5 export and layout, M6, M7, M8, M9 scripts): same region results as in M7. The differences are remembered settings (inspector, export format), the M8 start number in the export summary, playhead positions during previews, and the new process line in the log. The M9 script now drops "below" the lanes where it checks the M9 behaviour, because a drop over the lane now goes onto it.
+
+Not tested: a real Finder drag with Option held, and the Only toggle's look. Both need a check by hand.
+
+### Deviations, with reasons
+
+1. **Track output**: "every track mixes to stereo" holds for stereo sessions only. A session takes its channel count from the first audio that enters it, so a session that starts with a mono file renders mono, pan does nothing, and a stereo region in it plays its left channel. Proposal: render and play every session in stereo, and offer mono in the export format, where it already exists. This changes what old mono documents sound like (both channels at -3 dB instead of one channel at unity), so I did not change it without your OK.
+2. A plain drag over another region trims it live during the drag, so you hear and see the result before letting go. Dragging back off restores it, because each step starts from the state before the drag.
+3. The AU effect previews (Compressor, Limiter) play through the master. With the selected-track scope, the preview of those two still affects every track that plays. The rendered result is correct. Processes rendered in Tape (Normalize, Gain and the others) preview correctly per track.
+4. Up/Down are menu items with bare arrow keys. Like the other single keys, they are disabled while a text field edits.

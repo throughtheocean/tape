@@ -60,9 +60,19 @@ struct ProcessTarget: Sendable {
 final class ProcessSession: ObservableObject {
     let kind: ProcessKind
     let editor: EditorController
-    let targets: [ProcessTarget]
+    @Published private(set) var targets: [ProcessTarget]
     /// Set when a range is processed: normalize measures the whole range as one.
     let range: SampleRange?
+    /// On a range: every track's regions in it instead of the selected track's.
+    @Published var allTracks: Bool {
+        didSet {
+            guard allTracks != oldValue else { return }
+            let wasPreviewing = previewing
+            setPreview(false)
+            targets = Self.targets(editor, allTracks: allTracks).0
+            if wasPreviewing, !targets.isEmpty { setPreview(true) }
+        }
+    }
     @Published var parameters = ProcessParameters() {
         didSet { if parameters != oldValue { parametersChanged() } }
     }
@@ -77,21 +87,31 @@ final class ProcessSession: ObservableObject {
     init(kind: ProcessKind, editor: EditorController) {
         self.kind = kind
         self.editor = editor
-        (targets, range) = Self.targets(editor)
+        let own = Self.targets(editor, allTracks: false)
+        // The selected track has nothing in the range: start with every track so the sheet has something to do.
+        let all = own.1 != nil && own.0.isEmpty
+        allTracks = all
+        (targets, range) = all ? Self.targets(editor, allTracks: true) : own
         if kind == .resample { parameters.resampleRate = editor.sessionRate }
     }
 
     var targetSummary: String {
         let regions = targets.count == 1 ? "1 region" : "\(targets.count) regions"
-        if let range { return "\(regions) inside the range (\(editor.lengthText(range.length)))" }
+        if let range {
+            let scope = allTracks ? "" : " on \(editor.selectedTrack.name)"
+            return "\(regions)\(scope) inside the range (\(editor.lengthText(range.length)))"
+        }
         return regions
     }
 
-    /// The range's regions when a range is set, else the selected regions.
-    static func targets(_ editor: EditorController) -> ([ProcessTarget], SampleRange?) {
+    /// The selected track's regions in the range (every track's with `allTracks`) when a range is set, else the
+    /// selected regions.
+    static func targets(_ editor: EditorController, allTracks: Bool) -> ([ProcessTarget], SampleRange?) {
         let project = editor.project
         if let range = editor.range, !range.isEmpty {
-            let hits = project.regions.filter { $0.position < range.end && $0.end > range.start }
+            let hits = project.regions.filter {
+                $0.position < range.end && $0.end > range.start && (allTracks || $0.trackId == editor.selectedTrackID)
+            }
             let t = hits.map { r -> ProcessTarget in
                 let span = r.timelineRange.clamped(to: range)
                 let start = r.sourceIn + (span.start - r.position)
@@ -107,7 +127,7 @@ final class ProcessSession: ObservableObject {
     }
 
     static func canProcess(_ editor: EditorController) -> Bool {
-        let t = targets(editor).0
+        let t = targets(editor, allTracks: true).0
         return !t.isEmpty && t.allSatisfy { editor.document.loaded[$0.region.sourceId] != nil }
     }
 
@@ -211,7 +231,7 @@ final class ProcessSession: ObservableObject {
     /// Renders each target region with the process into memory and plays an edit list that uses those copies.
     private func rebuildPreview(play: Bool) {
         previewTask?.cancel()
-        let list = editor.document.editList()
+        let list = editor.playbackList()
         let kind = kind, parameters = parameters, targets = targets, range = range, rate = editor.sessionRate
         let project = editor.project
         status = "Rendering preview"

@@ -89,6 +89,80 @@ public enum EditOperations {
         return copies
     }
 
+    // MARK: Copy and overwrite
+
+    /// Adds a copy of every region in `ids`, in place, with the id from `newIDs` (a fresh one when missing).
+    /// Everything except the id is kept. Returns the copies' ids.
+    @discardableResult
+    public static func copy(_ project: inout Project, ids: Set<UUID>, newIDs: [UUID: UUID] = [:]) -> [UUID] {
+        var copies: [UUID] = []
+        for var r in project.regions where ids.contains(r.id) {
+            r.id = newIDs[r.id] ?? UUID()
+            project.regions.append(r)
+            copies.append(r.id)
+        }
+        project.sortRegions()
+        return copies
+    }
+
+    /// Regions in `ids` cover what lies under them on their own track: every other region there loses the covered
+    /// part. A region covered in the middle splits in two, one covered entirely is removed. A cut edge has no
+    /// fade; an untouched edge keeps its fade. Regions on other tracks and the regions in `ids` stay as they are.
+    /// `pieceID` names the second and later pieces of a split region (a live drag passes stable ones).
+    public static func overwrite(_ project: inout Project, by ids: Set<UUID>,
+                                 pieceID: (UUID, Int) -> UUID = { _, _ in UUID() }) {
+        let top = project.regions.filter { ids.contains($0.id) }
+        guard !top.isEmpty else { return }
+        var next: [Region] = []
+        for r in project.regions {
+            let covers = top.filter { $0.trackId == r.trackId }.map(\.timelineRange).filter { $0.start < r.end && $0.end > r.position }
+            guard !ids.contains(r.id), !covers.isEmpty else {
+                next.append(r)
+                continue
+            }
+            let pieces = subtract([r.timelineRange], union(covers))
+            for (k, piece) in pieces.enumerated() {
+                var p = r
+                if k > 0 { p.id = pieceID(r.id, k) }
+                p.sourceIn = r.sourceIn + (piece.start - r.position)
+                p.sourceOut = p.sourceIn + piece.length
+                p.position = piece.start
+                if piece.start != r.position { p.fadeIn = .none }
+                if piece.end != r.end { p.fadeOut = .none }
+                fitFades(&p)
+                next.append(p)
+            }
+        }
+        project.regions = next
+        project.sortRegions()
+    }
+
+    /// Puts `regions` on `track` one after another from `start` (a file drop over a lane). With `overwrite` they
+    /// cover what lies under them, else they overlap and sum. Returns their ids.
+    @discardableResult
+    public static func place(_ project: inout Project, _ regions: [Region], track: UUID, at start: Int64, overwrite: Bool) -> [UUID] {
+        var position = max(0, start)
+        var ids: [UUID] = []
+        for var r in regions {
+            r.trackId = track
+            r.position = position
+            position += r.length
+            project.regions.append(r)
+            ids.append(r.id)
+        }
+        project.sortRegions()
+        if overwrite { self.overwrite(&project, by: Set(ids)) }
+        return ids
+    }
+
+    /// Start for a block of `lengths` dropped at `start`: moved so one of its edges lands on a target within
+    /// `tolerance`, as a region drag snaps.
+    public static func snappedStart(_ start: Int64, lengths: [Int64], targets: [Int64], tolerance: Int64) -> Int64 {
+        var edges = [start]
+        for l in lengths { edges.append(edges.last! + l) }
+        return max(0, start + (snapCorrection(edges: edges, targets: targets, tolerance: tolerance) ?? 0))
+    }
+
     // MARK: Move and trim
 
     /// Moves `ids` by `delta`, limited so no region starts before 0. Returns the delta applied.
@@ -262,6 +336,18 @@ public enum EditOperations {
         var best: Int64?
         for t in targets where abs(t - frame) <= tolerance {
             if best == nil || abs(t - frame) < abs(best! - frame) { best = t }
+        }
+        return best
+    }
+
+    /// The smallest shift that puts one of `edges` on a target within `tolerance`, or nil when none is close.
+    public static func snapCorrection(edges: [Int64], targets: [Int64], tolerance: Int64) -> Int64? {
+        var best: Int64?
+        for edge in edges {
+            if let t = nearest(edge, in: targets, tolerance: tolerance) {
+                let correction = t - edge
+                if best == nil || abs(correction) < abs(best!) { best = correction }
+            }
         }
         return best
     }

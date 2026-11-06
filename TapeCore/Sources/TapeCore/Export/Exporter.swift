@@ -184,6 +184,7 @@ public enum Exporter {
     public static func jobs(list: EditList, scope: ExportScope, directory: URL, fileName: String, pattern: String,
                             documentName: String, date: Date, settings: ExportSettings,
                             trackNames: [UUID: String] = [:], startIndex: Int = 1) -> [ExportJob] {
+        let list = list.isolating(nil)
         let ext = settings.fileExtension
         func url(_ base: String) -> URL {
             let clean = base.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")

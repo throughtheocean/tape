@@ -176,6 +176,29 @@ final class TapeDocument: ObservableObject {
         return trackIDs
     }
 
+    /// Imports the files onto `track` one after another (a drop over a lane). `start` gets their lengths in session
+    /// frames and returns the first region's position. With `overwrite` they cover what lies under them. One undo step.
+    func importAudio(_ urls: [URL], onto track: UUID, start: ([Int64]) -> Int64, overwrite: Bool) throws {
+        let refs = try sourceRefs(urls)
+        guard !refs.isEmpty else { return }
+        let rate = project.sessionRate ?? refs[0].sampleRate
+        let lengths = refs.map { $0.sessionFrameCount(sessionRate: rate) }
+        let position = start(lengths)
+        let name = refs.count == 1 ? "Import \(refs[0].name)" : "Import \(refs.count) Files"
+        apply(name) { p in
+            if p.sessionRate == nil {
+                p.sessionRate = refs[0].sampleRate
+                p.channelCount = refs[0].channelCount
+            }
+            let regions = zip(refs, lengths).map { ref, length in
+                Region(name: (ref.name as NSString).deletingPathExtension, sourceId: ref.id, sourceIn: 0, sourceOut: length,
+                       position: 0)
+            }
+            p.sources += refs
+            EditOperations.place(&p, regions, track: p.track(track)?.id ?? p.tracks[0].id, at: position, overwrite: overwrite)
+        }
+    }
+
     private func sourceRefs(_ urls: [URL]) throws -> [SourceRef] {
         try urls.map { url in
             let info = try AudioFileInfo(url: url)

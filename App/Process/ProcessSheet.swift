@@ -11,6 +11,13 @@ struct ProcessSheet: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(session.kind.title).font(.headline)
                 Text(session.targetSummary).font(.system(size: 11)).foregroundStyle(Color.tapeSecondary)
+                if session.range != nil, session.editor.project.tracks.count > 1 {
+                    Toggle("All tracks in range", isOn: $session.allTracks)
+                        .toggleStyle(.checkbox)
+                        .font(.system(size: 11))
+                        .disabled(session.isApplying)
+                        .padding(.top, 4)
+                }
             }
             parameters
                 .font(.system(size: 12))
@@ -37,7 +44,7 @@ struct ProcessSheet: View {
                     session.apply { ok in if ok { close() } }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(session.isApplying)
+                .disabled(session.isApplying || session.targets.isEmpty)
             }
         }
         .padding(20)

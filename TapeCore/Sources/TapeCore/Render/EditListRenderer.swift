@@ -50,6 +50,9 @@ public struct EditList: @unchecked Sendable {
     public var channelCount: Int
     public var tracks: [TrackMix]
     public var masterGainDB: Double
+    /// Playback isolation ("Only"): when set, this track plays alone with its gain and pan, whatever the mute and
+    /// solo flags say. Never set for export.
+    public var isolatedTrack: UUID?
     /// Index into `tracks` per region, -1 when the list has no tracks.
     let trackOfRegion: [Int]
 
@@ -75,8 +78,17 @@ public struct EditList: @unchecked Sendable {
 
     /// Same sources and mix, other regions.
     public func with(regions: [Region], sources: [UUID: SampleSource]? = nil) -> EditList {
-        EditList(regions: regions, sources: sources ?? self.sources, channelCount: channelCount, tracks: tracks,
-                 masterGainDB: masterGainDB)
+        var l = EditList(regions: regions, sources: sources ?? self.sources, channelCount: channelCount, tracks: tracks,
+                         masterGainDB: masterGainDB)
+        l.isolatedTrack = isolatedTrack
+        return l
+    }
+
+    /// The same list with playback isolated to `track`, or not isolated for nil.
+    public func isolating(_ track: UUID?) -> EditList {
+        var l = self
+        l.isolatedTrack = track
+        return l
     }
 
     /// One track alone, solo ignored, master gain left out: the stem of that track as it feeds the mix.
@@ -165,7 +177,7 @@ public final class EditListRenderer: @unchecked Sendable {
         let end = start + Int64(frames)
         let anySolo = list.tracks.contains { $0.solo }
         for (t, track) in list.tracks.enumerated() {
-            let audible = !track.mute && (!anySolo || track.solo)
+            let audible = list.isolatedTrack.map { $0 == track.id } ?? (!track.mute && (!anySolo || track.solo))
             let gain = track.gain
             guard audible, gain > 0 else { continue }
             trackBuffer.zero(offset: 0, count: frames)

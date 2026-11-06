@@ -5,7 +5,8 @@ import UniformTypeIdentifiers
 /// Window content that accepts audio files and Tape projects dragged from the Finder.
 @MainActor
 final class FileDropView: NSView {
-    var onDrop: ([URL], NSPoint) -> Bool = { _, _ in false }
+    /// Files, window point, Option held.
+    var onDrop: ([URL], NSPoint, Bool) -> Bool = { _, _, _ in false }
     var canDrop: () -> Bool = { true }
 
     override init(frame: NSRect) {
@@ -37,6 +38,6 @@ final class FileDropView: NSView {
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let files = urls(sender)
         guard canDrop(), !files.isEmpty else { return false }
-        return onDrop(files, sender.draggingLocation)
+        return onDrop(files, sender.draggingLocation, NSEvent.modifierFlags.contains(.option))
     }
 }

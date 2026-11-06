@@ -1,0 +1,74 @@
+# M10a: Only, drops onto a lane, overlap on one track, Option drag copy, Up and Down, process scope.
+# Sources: /tmp/tape-m6-a.wav (4 s stereo, 192000 frames) and /tmp/tape-m6-b.wav (3 s mono, 144000 frames), see M6.
+wait 1
+key cmd+shift+m
+drop 300 mid /tmp/tape-m6-a.wav /tmp/tape-m6-b.wav
+waitLoaded
+fit
+log start: A on track 1, B on track 2, both at 0
+
+# Only: playback hears the shown track alone, the flags stay, export is unchanged.
+key cmd+shift+m
+key opt+s
+log single view track 1, Only on: isolated 1, mute and solo unchanged
+measure playback only track 1
+measure export mix
+# keyevent shows the arrow matches the menu item; a background run has no key window, so key performs it.
+keyevent down
+key down
+log Down: track 2 shown, Only follows: isolated 2
+measure playback only track 2
+key cmd+shift+m
+log multitrack view clears Only
+keyevent up
+key up
+log Up: track 1 selected, header highlighted
+
+# Drop over lane 1 near the end of B on track 2: snaps across lanes to 144000. Option keeps both.
+drop opt f143500 lane1 /tmp/tape-m6-b.wav
+waitLoaded
+log option drop on track 1: b at 144000 over A, A untouched, one undo step
+key cmd+z
+log undo removes the dropped region
+drop f143500 lane1 /tmp/tape-m6-b.wav
+waitLoaded
+log plain drop: b at 144000 trims A to 0..144000
+key cmd+z
+drop f96000 below /tmp/tape-m6-b.wav
+waitLoaded
+log below the last lane: a new track 3 at 96000
+key cmd+z
+
+# Option drag copies a region, here from track 1 to track 2; the original stays.
+mouse down f24000 wave:1
+mouse drag f60000 wave:2 opt
+mouse drag f224000 wave:2 opt
+mouse up f224000 wave:2 opt
+log option drag: a copy of A on track 2 at 200000, A still on track 1, undo 'Copy'
+key cmd+z
+# A plain move onto another region trims the one underneath.
+mouse down f24000 wave:2
+mouse drag f60000 wave:1
+mouse drag f72000 wave:1
+mouse up f72000 wave:1
+log move B onto track 1 at 48000: A trimmed to 0..48000, undo 'Move'
+key cmd+z
+
+# Process on a range: the selected track, or every track with the checkbox.
+mouse click f340000 wave:2
+mouse down f24000 wave:2 shift
+mouse drag f120000 wave:2 shift
+mouse up f120000 wave:2 shift
+menu Gain...
+wait 0.5
+log process sheet on track 2: one target
+processscope all
+log all tracks in range: two targets
+sheet escape
+# The single view drops onto the shown track at the drop point.
+key opt+x
+key cmd+shift+m
+drop opt f100000 mid /tmp/tape-m6-b.wav
+waitLoaded
+log single view drop: b on track 2 at 100000
+quit

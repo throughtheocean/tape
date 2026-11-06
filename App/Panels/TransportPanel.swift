@@ -49,6 +49,17 @@ struct TransportPanel: View {
             .disabled(document.project.tracks.count < 2)
             .help("Track shown in the single view")
 
+            Toggle(isOn: $editor.onlyTrack) {
+                Text("Only")
+                    .font(.system(size: 11, weight: editor.onlyTrack ? .semibold : .regular))
+                    .foregroundStyle(editor.onlyTrack ? Color.black : Color.tapeSecondary)
+                    .padding(.horizontal, 4)
+            }
+            .toggleStyle(.button)
+            .tint(Color(nsColor: Theme.accent))
+            .disabled(editor.multitrack)
+            .help("Hear only the shown track (Option S). Playback only: mute, solo and export are not changed.")
+
             Spacer(minLength: 8)
 
             Text(rateText)

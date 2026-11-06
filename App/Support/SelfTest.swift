@@ -68,10 +68,22 @@ final class SelfTest {
         case "import":
             c.importAudio(urls: args.map { URL(fileURLWithPath: $0) })
         case "drop":
-            // drop <x in the track view, or f<frame>> <file>...: as a Finder drop at that point over the lanes.
-            guard let first = args.first else { break }
-            let point = c.timeline.metalView.convert(NSPoint(x: x(first, c.editor), y: c.timeline.metalView.bounds.midY), to: nil)
-            write("drop accepted \(c.dropFiles(args.dropFirst().map { URL(fileURLWithPath: $0) }, at: point))")
+            // drop [opt] <x or f<frame>> <y in the track view, or lane<n>, or below> <file>...: as a Finder drop there.
+            var rest = Array(args)
+            let keep = rest.first == "opt"
+            if keep { rest.removeFirst() }
+            guard rest.count >= 3 else { break }
+            let metal = c.timeline.metalView
+            let y: CGFloat
+            if rest[1].hasPrefix("lane"), let n = Int(rest[1].dropFirst(4)), let lane = c.editor.lanes().first(where: { $0.index == n - 1 }) {
+                y = CGFloat(lane.top + lane.height / 2)
+            } else if rest[1] == "below" {
+                y = CGFloat((c.editor.lanes().last?.bottom ?? 0) + 10)
+            } else {
+                y = CGFloat(Double(rest[1]) ?? Double(metal.bounds.midY))
+            }
+            let point = metal.convert(NSPoint(x: x(rest[0], c.editor), y: y), to: nil)
+            write("drop accepted \(c.dropFiles(rest.dropFirst(2).map { URL(fileURLWithPath: $0) }, at: point, keepBoth: keep))")
         case "wait":
             try await Task.sleep(nanoseconds: UInt64((Double(args.first ?? "1") ?? 1) * 1e9))
         case "waitLoaded":
@@ -82,6 +94,15 @@ final class SelfTest {
             }
         case "key":
             key(args.joined(separator: " "), controller: c)
+        case "keyevent":
+            // keyevent <up|down>: a real arrow key event through the main menu's key equivalent matching.
+            let char = Self.named[args.first ?? ""] ?? ""
+            let code: UInt16 = args.first == "up" ? 126 : 125
+            if let e = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.numericPad, .function],
+                                        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: c.window?.windowNumber ?? 0,
+                                        context: nil, characters: char, charactersIgnoringModifiers: char, isARepeat: false, keyCode: code) {
+                write("keyevent \(args.first ?? "") handled \(NSApp.mainMenu?.performKeyEquivalent(with: e) ?? false) keyWindow \(NSApp.keyWindow === c.window) mainWindow \(NSApp.mainWindow === c.window)")
+            }
         case "menu":
             menu(title: args.joined(separator: " "), controller: c)
         case "mouse":
@@ -130,6 +151,9 @@ final class SelfTest {
             write("preview \(c.processSession?.previewing == true ? "on" : "off") playing \(editor.isPlaying)")
         case "param":
             param(args, session: c.processSession)
+        case "processscope":
+            c.processSession?.allTracks = args.first == "all"
+            write("process scope all \(c.processSession?.allTracks ?? false) targets \(c.processSession?.targets.count ?? 0)")
         case "waitApply":
             for _ in 0..<600 {
                 if c.processSession == nil || c.processSession?.isApplying == false { break }
@@ -273,6 +297,8 @@ final class SelfTest {
         "home": String(Character(UnicodeScalar(UInt16(NSHomeFunctionKey))!)),
         "end": String(Character(UnicodeScalar(UInt16(NSEndFunctionKey))!)),
         "comma": ",", "period": ".",
+        "up": String(Character(UnicodeScalar(UInt16(NSUpArrowFunctionKey))!)),
+        "down": String(Character(UnicodeScalar(UInt16(NSDownArrowFunctionKey))!)),
     ]
 
     private func key(_ spec: String, controller: MainWindowController) {
@@ -457,7 +483,8 @@ final class SelfTest {
             ?? (selected.isEmpty ? nil : SampleRange(start: selected.map(\.start).min()!, end: selected.map(\.end).max()!))
             ?? SampleRange(start: 0, end: e.documentLength)
         guard !span.isEmpty else { return }
-        let list = c.tapeDocument.editList()
+        // "measure playback ...": the list playback hears (Only applied), else the document's as export renders it.
+        let list = label.hasPrefix("playback") ? e.playbackList() : c.tapeDocument.editList()
         let out = SampleBuffer(channelCount: list.channelCount, capacity: Int(span.length))
         EditListRenderer().render(list, start: span.start, frames: Int(span.length), into: out)
         let buffer = AudioBuffer(channels: out.toArrays(count: Int(span.length)), sampleRate: e.sessionRate)
@@ -550,7 +577,11 @@ final class SelfTest {
                          r.fadeIn.length, r.fadeIn.shape.rawValue, r.fadeIn.blend, r.fadeOut.length, r.fadeOut.shape.rawValue, r.fadeOut.blend)
                   + track)
         }
+        if let p = c.processSession {
+            write("  process \(p.kind.title): \(p.targetSummary), allTracks \(p.allTracks), targets \(p.targets.map(\.region.name).joined(separator: ","))")
+        }
         guard e.multitrack || d.project.tracks.count > 1 else { return }
+        write("  only \(e.onlyTrack) isolated \(e.playbackList().isolatedTrack.flatMap { d.project.trackIndex($0) }.map { "\($0 + 1)" } ?? "none")")
         write(String(format: "  view %@ selectedTrack %d headerFocused %@ laneHeight %.0f expand %@ laneScroll %.0f master %.2f",
                      e.multitrack ? "multi" : "single", (d.project.trackIndex(e.selectedTrackID) ?? -1) + 1,
                      e.headerFocused ? "true" : "false", e.laneHeight, e.expandSelected ? "true" : "false", e.laneScroll,

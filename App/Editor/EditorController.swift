@@ -86,12 +86,24 @@ final class EditorController: ObservableObject {
     @Published var multitrack: Bool {
         didSet {
             guard oldValue != multitrack else { return }
+            if multitrack { onlyTrack = false }
             layoutChanged()
             revealSelectedLane()
         }
     }
     /// The track the single view shows, recordings go to and the inspector's Track section edits.
-    @Published var selectedTrackID: UUID
+    @Published var selectedTrackID: UUID {
+        didSet { if onlyTrack, oldValue != selectedTrackID { playback.setEditList(playbackList()) } }
+    }
+    /// "Only" in the single view: playback hears the shown track alone. Per window, not saved, not exported.
+    @Published var onlyTrack = false {
+        didSet { if oldValue != onlyTrack { playback.setEditList(playbackList()) } }
+    }
+
+    /// The document's mix as playback hears it, isolated to the shown track while "Only" is on.
+    func playbackList() -> EditList {
+        document.editList().isolating(onlyTrack && !multitrack ? selectedTrackID : nil)
+    }
     /// A track header is selected: Delete removes the track and the inspector shows the track.
     @Published var headerFocused = false {
         didSet { if oldValue != headerFocused { needsDisplay?() } }
@@ -160,7 +172,7 @@ final class EditorController: ObservableObject {
         }
         layoutVersion += 1
         configureEngineIfNeeded()
-        playback.setEditList(document.editList())
+        playback.setEditList(playbackList())
         updateLoop()
         if samplesPerPoint <= 0, documentLength > 0 { fitAll() }
         clampView()
@@ -296,7 +308,7 @@ final class EditorController: ObservableObject {
     /// Back to the document's edit list and loop after a preview.
     func endPreview() {
         if isPlaying { stopPlayback(at: playback.position) }
-        playback.setEditList(document.editList())
+        playback.setEditList(playbackList())
         updateLoop()
     }
 

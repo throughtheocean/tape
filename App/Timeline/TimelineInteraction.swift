@@ -200,7 +200,15 @@ extension TimelineMetalView {
 
     private func beginGesture() {
         gestureBase = editor.project
+        pieceIDs = [:]
         editor.document.beginGesture()
+    }
+
+    private func pieceID(_ region: UUID, _ k: Int) -> UUID {
+        if let id = pieceIDs[region]?[k] { return id }
+        let id = UUID()
+        pieceIDs[region, default: [:]][k] = id
+        return id
     }
 
     // MARK: Drag
@@ -221,23 +229,31 @@ extension TimelineMetalView {
             let lanes = editor.multitrack && abs(Double(p.y) - downY) >= 6
             guard abs(Double(p.x) - downX) >= 3 || lanes else { return }
             beginGesture()
-            drag = .move(ids: editor.selectedIDs, downFrame: downFrame, downLane: editor.lane(atY: downY)?.index ?? 0)
+            let ids = editor.selectedIDs
+            let copies = flags.contains(.option) ? Dictionary(uniqueKeysWithValues: ids.map { ($0, UUID()) }) : nil
+            drag = .move(ids: ids, downFrame: downFrame, downLane: editor.lane(atY: downY)?.index ?? 0, copies: copies)
+            if let copies { editor.selection = Set(copies.values) }
             mouseDragged(with: event)
-        case let .move(ids, downFrame, downLane):
+        case let .move(ids, downFrame, downLane, copies):
             var delta = frame - downFrame
             if !flags.contains(.command) { delta = editor.snapMove(delta: delta, ids: ids, base: gestureBase) }
             let laneDelta = editor.multitrack ? (editor.lane(atY: Double(p.y), clamped: true)?.index ?? downLane) - downLane : 0
             var applied: Int64 = 0
             var lanes = 0
-            doc.updateGesture {
-                applied = EditOperations.move(&$0, ids: ids, by: delta)
-                lanes = EditOperations.moveToTrack(&$0, ids: ids, byLanes: laneDelta)
+            let moving = copies.map { Set($0.values) } ?? ids
+            doc.updateGesture { project in
+                if let copies { EditOperations.copy(&project, ids: ids, newIDs: copies) }
+                applied = EditOperations.move(&project, ids: moving, by: delta)
+                lanes = EditOperations.moveToTrack(&project, ids: moving, byLanes: laneDelta)
+                // A plain move covers what lies under it on its track; an Option drag keeps both and they sum.
+                if copies == nil { EditOperations.overwrite(&project, by: moving, pieceID: pieceID) }
             }
-            if lanes != 0, let id = ids.first, let r = editor.project.regions.first(where: { $0.id == id }),
+            let verb = copies == nil ? "" : "Copy "
+            if lanes != 0, let id = moving.first, let r = editor.project.regions.first(where: { $0.id == id }),
                let t = editor.project.track(r.trackId) {
-                hint("\(editor.durationText(applied))  \(t.name)", at: p)
+                hint("\(verb)\(editor.durationText(applied))  \(t.name)", at: p)
             } else {
-                hint(editor.durationText(applied), at: p)
+                hint(verb + editor.durationText(applied), at: p)
             }
         case let .trim(id, start):
             guard let r = gestureBase.regions.first(where: { $0.id == id }) else { return }
@@ -329,7 +345,7 @@ extension TimelineMetalView {
         case let .pressRegion(id, _, _, _):
             editor.selection = [id]
             editor.locate(frameAt(p))
-        case .move: doc.endGesture("Move")
+        case let .move(_, _, _, copies): doc.endGesture(copies == nil ? "Move" : "Copy")
         case .trim: doc.endGesture("Trim")
         case .fade: doc.endGesture("Fade")
         case .fadeShape: doc.endGesture("Fade Shape")

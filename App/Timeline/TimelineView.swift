@@ -165,7 +165,8 @@ final class TimelineMetalView: MTKView {
         case minimapEdge(left: Bool, fixedFrame: Double)
         /// Mouse down on a region; becomes a move once the pointer travels.
         case pressRegion(id: UUID, downX: Double, downY: Double, downFrame: Int64)
-        case move(ids: Set<UUID>, downFrame: Int64, downLane: Int)
+        /// `copies` maps each region to its copy's id for an Option drag; nil moves the regions themselves.
+        case move(ids: Set<UUID>, downFrame: Int64, downLane: Int, copies: [UUID: UUID]?)
         case trim(id: UUID, start: Bool)
         case fade(id: UUID, end: EditOperations.FadeEnd, ids: Set<UUID>)
         case fadeShape(id: UUID, end: EditOperations.FadeEnd, ids: Set<UUID>, startValue: Double, downY: Double)
@@ -176,6 +177,8 @@ final class TimelineMetalView: MTKView {
     }
 
     var drag = Drag.none
+    /// Ids for the pieces of regions split by an overwrite, stable through one drag.
+    var pieceIDs: [UUID: [Int: UUID]] = [:]
     /// Project at the start of the current drag.
     var gestureBase = Project()
     private var trackingArea: NSTrackingArea?

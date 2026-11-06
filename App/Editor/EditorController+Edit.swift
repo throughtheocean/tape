@@ -120,21 +120,19 @@ extension EditorController {
         return ZeroCrossing.nearest(in: list, around: frame, radius: radius)
     }
 
+    /// Start for files of `lengths` dropped at `frame`: one of their edges snaps to a region edge on any visible
+    /// lane or the playhead within 8 points.
+    func snappedDrop(_ frame: Int64, lengths: [Int64]) -> Int64 {
+        let targets = EditOperations.snapTargets(project, excluding: [], extra: [playhead], tracks: visibleTrackIDs)
+        return EditOperations.snappedStart(frame, lengths: lengths, targets: targets, tolerance: tolerance(points: 8))
+    }
+
     /// Snaps a moved block of regions so one of its edges lands on another region edge or the playhead.
     func snapMove(delta: Int64, ids: Set<UUID>, base: Project) -> Int64 {
         let moved = base.regions.filter { ids.contains($0.id) }
         let targets = EditOperations.snapTargets(base, excluding: ids, extra: [playhead], tracks: visibleTrackIDs)
-        let tol = tolerance(points: 8)
-        var best: Int64?
-        for r in moved {
-            for edge in [r.position + delta, r.end + delta] {
-                if let t = EditOperations.nearest(edge, in: targets, tolerance: tol) {
-                    let correction = t - edge
-                    if best == nil || abs(correction) < abs(best!) { best = correction }
-                }
-            }
-        }
-        return delta + (best ?? 0)
+        let edges = moved.flatMap { [$0.position + delta, $0.end + delta] }
+        return delta + (EditOperations.snapCorrection(edges: edges, targets: targets, tolerance: tolerance(points: 8)) ?? 0)
     }
 
     // MARK: Text

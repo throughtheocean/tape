@@ -51,6 +51,13 @@ extension EditorController {
         saveView()
     }
 
+    /// Up and Down arrows: the track above or below becomes the selected one, its header highlighted.
+    func selectAdjacentTrack(by step: Int) {
+        guard let i = project.trackIndex(selectedTrackID), project.tracks.indices.contains(i + step) else { return }
+        selectTrack(project.tracks[i + step].id, header: true)
+        revealSelectedLane()
+    }
+
     // MARK: Lanes
 
     /// Top and bottom of the area lanes are drawn in.
