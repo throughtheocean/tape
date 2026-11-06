@@ -130,7 +130,7 @@ final class AppSettings: ObservableObject {
         frameRate = rate > 0 ? rate : 25
         let hex = defaults.object(forKey: "accentColor") as? Int
         accentHex = UInt32(hex ?? 0x3B82F6)
-        inspectorVisible = defaults.object(forKey: "inspectorVisible") as? Bool ?? true
+        inspectorVisible = defaults.object(forKey: "inspectorVisible") as? Bool ?? false
         snapToZeroCrossing = defaults.object(forKey: "snapToZeroCrossing") as? Bool ?? true
         recordDeviceUID = defaults.string(forKey: "recordDeviceUID")
         recordChannels = (defaults.array(forKey: "recordChannels") as? [Int]) ?? [0, 1]

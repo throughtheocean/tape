@@ -93,6 +93,14 @@ final class SelfTest {
                 editor.tick()
                 try await Task.sleep(nanoseconds: 16_000_000)
             }
+        case "button":
+            switch args.first {
+            case "sidebar": c.sidebarToggle.performClick(nil)
+            case "select": c.timeline.sideBar.select.toggle()
+            case "blade": c.timeline.sideBar.blade.toggle()
+            case "snap": c.timeline.sideBar.snap.toggle()
+            default: write("no button \(args.first ?? "")")
+            }
         case "snapshot":
             snapshot(c, to: args[0])
         case "log":
@@ -482,6 +490,7 @@ final class SelfTest {
         s += " input \(rec.device?.name ?? "none") needsPermission \(rec.needsPermission) recording \(rec.isRecording)"
         if let err = rec.inputError { s += " inputError '\(err)'" }
         s += " tool \(e.tool) sheet \(c.window?.attachedSheet != nil) sources \(d.project.sources.count) unused \(d.unusedSources.count) orphans \(d.cleanUpPreview().files)"
+        s += " inspector \(c.isInspectorVisible) timelineHeight \(Int(c.timeline.bounds.height)) snap \(AppSettings.shared.snapToZeroCrossing)"
         if let alert = c.openAlert { s += " alert '\(alert.messageText)'" }
         if let responder = c.window?.firstResponder { s += " focus \(type(of: responder))" }
         write(s)
@@ -517,6 +526,7 @@ final class SelfTest {
             ctx.draw(image, in: CGRect(x: r.minX * scale, y: r.minY * scale, width: r.width * scale, height: r.height * scale))
         }
         drawView(tl.toolStrip)
+        drawView(tl.sideBar)
         drawView(tl.ruler)
         tl.labels.update()
         if let layer = tl.labels.layer {

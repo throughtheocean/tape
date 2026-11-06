@@ -8,7 +8,7 @@ final class ZoomBarView: NSView {
     var setValue: (Double) -> Void = { _ in }
     var reset: () -> Void = {}
 
-    private let handleSize: CGFloat = 11
+    private var handleSize: CGFloat { vertical ? 14 : 11 }
     private let inset: CGFloat = 8
     private var drawnValue = -1.0
 
@@ -54,14 +54,15 @@ final class ZoomBarView: NSView {
         drawnValue = value()
         let p = position(for: drawnValue)
         let mid = (vertical ? bounds.width : bounds.height) / 2
+        let thick: CGFloat = vertical ? 5 : 3
         func bar(_ a: CGFloat, _ b: CGFloat) -> NSRect {
-            vertical ? NSRect(x: mid - 1.5, y: min(a, b), width: 3, height: abs(b - a))
-                : NSRect(x: min(a, b), y: mid - 1.5, width: abs(b - a), height: 3)
+            vertical ? NSRect(x: mid - thick / 2, y: min(a, b), width: thick, height: abs(b - a))
+                : NSRect(x: min(a, b), y: mid - thick / 2, width: abs(b - a), height: thick)
         }
         NSColor(white: 1, alpha: 0.14).setFill()
-        NSBezierPath(roundedRect: bar(t.start, t.end), xRadius: 1.5, yRadius: 1.5).fill()
+        NSBezierPath(roundedRect: bar(t.start, t.end), xRadius: thick / 2, yRadius: thick / 2).fill()
         Theme.accent.setFill()
-        NSBezierPath(roundedRect: bar(vertical ? t.end : t.start, p), xRadius: 1.5, yRadius: 1.5).fill()
+        NSBezierPath(roundedRect: bar(vertical ? t.end : t.start, p), xRadius: thick / 2, yRadius: thick / 2).fill()
         let knob = vertical ? NSRect(x: mid - handleSize / 2, y: p - handleSize / 2, width: handleSize, height: handleSize)
             : NSRect(x: p - handleSize / 2, y: mid - handleSize / 2, width: handleSize, height: handleSize)
         NSColor(white: 0.92, alpha: 1).setFill()
@@ -142,16 +143,18 @@ final class SnapToZeroButton: NSView {
     }
 }
 
-/// Toggle for the blade tool, drawn as scissors.
+/// Toggle drawn as an SF Symbol, used for the tool buttons.
 @MainActor
-final class BladeToolButton: NSView {
+final class SymbolToolButton: NSView {
     var isOn: () -> Bool = { false }
     var toggle: () -> Void = {}
+    private let symbolName: String
     private var drawnState: Bool?
 
-    override init(frame: NSRect) {
-        super.init(frame: frame)
-        toolTip = "Blade tool (B). Click a region to cut it. A returns to the select tool."
+    init(symbol: String, toolTip: String) {
+        symbolName = symbol
+        super.init(frame: .zero)
+        self.toolTip = toolTip
     }
 
     @available(*, unavailable)
@@ -170,8 +173,8 @@ final class BladeToolButton: NSView {
         let box = bounds.insetBy(dx: 1, dy: 2)
         (on ? Theme.accent.withAlphaComponent(0.22) : NSColor(white: 1, alpha: 0.06)).setFill()
         NSBezierPath(roundedRect: box, xRadius: 4, yRadius: 4).fill()
-        let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .medium)
-        guard let symbol = NSImage(systemSymbolName: "scissors", accessibilityDescription: "Blade tool")?
+        let config = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
+        guard let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: toolTip)?
             .withSymbolConfiguration(config) else { return }
         let color = on ? Theme.accent : Theme.secondaryText
         let tinted = NSImage(size: symbol.size, flipped: false) { rect in
@@ -190,17 +193,13 @@ final class BladeToolButton: NSView {
     }
 }
 
-/// Strip under the minimap: blade tool, snap toggle and horizontal zoom, right aligned.
+/// Strip under the minimap with the horizontal zoom, right aligned.
 @MainActor
 final class TimelineToolStrip: NSView {
-    let blade = BladeToolButton(frame: .zero)
-    let snap = SnapToZeroButton(frame: .zero)
     let zoomBar = ZoomBarView(vertical: false, toolTip: "Horizontal zoom (Option scroll, Command scroll, pinch). Double click to fit.")
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        addSubview(blade)
-        addSubview(snap)
         addSubview(zoomBar)
     }
 
@@ -211,10 +210,8 @@ final class TimelineToolStrip: NSView {
 
     override func layout() {
         super.layout()
-        let barWidth: CGFloat = min(220, max(80, bounds.width * 0.3))
+        let barWidth: CGFloat = min(260, max(80, bounds.width * 0.3))
         zoomBar.frame = NSRect(x: bounds.width - barWidth - 4, y: 0, width: barWidth, height: bounds.height - 1)
-        snap.frame = NSRect(x: zoomBar.frame.minX - 34, y: 0, width: 30, height: bounds.height - 1)
-        blade.frame = NSRect(x: snap.frame.minX - 32, y: 0, width: 30, height: bounds.height - 1)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -225,8 +222,55 @@ final class TimelineToolStrip: NSView {
     }
 
     func refresh() {
+        zoomBar.refreshIfChanged()
+    }
+}
+
+/// Vertical bar right of the track: vertical zoom on top, tools below.
+@MainActor
+final class TimelineSideBar: NSView {
+    static let width: CGFloat = 36
+    static let zoomHeight: CGFloat = 150
+
+    let amplitudeBar = ZoomBarView(vertical: true, toolTip: "Vertical zoom (Option Shift scroll). Double click to reset.")
+    let select = SymbolToolButton(symbol: "cursorarrow", toolTip: "Select tool (A)")
+    let blade = SymbolToolButton(symbol: "scissors", toolTip: "Blade tool (B). Click a region to cut it. A returns to the select tool.")
+    let snap = SnapToZeroButton(frame: .zero)
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        for v in [amplitudeBar, select, blade, snap] as [NSView] { addSubview(v) }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var isFlipped: Bool { true }
+
+    override func layout() {
+        super.layout()
+        let w = bounds.width
+        let zoom = min(Self.zoomHeight, max(60, bounds.height - 110))
+        amplitudeBar.frame = NSRect(x: 0, y: 0, width: w, height: zoom)
+        var y = zoom + 9
+        for button in [select, blade, snap] as [NSView] {
+            button.frame = NSRect(x: 2, y: y, width: w - 4, height: 28)
+            y += 30
+        }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        Theme.chrome.setFill()
+        bounds.fill()
+        Theme.separator.setFill()
+        NSRect(x: 0, y: 0, width: 1, height: bounds.height).fill()
+        NSRect(x: 6, y: min(Self.zoomHeight, max(60, bounds.height - 110)) + 4, width: bounds.width - 12, height: 1).fill()
+    }
+
+    func refresh() {
+        amplitudeBar.refreshIfChanged()
+        select.refreshIfChanged()
         blade.refreshIfChanged()
         snap.refreshIfChanged()
-        zoomBar.refreshIfChanged()
     }
 }

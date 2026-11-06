@@ -7,14 +7,14 @@ import TapeCore
 @MainActor
 final class TimelineView: NSView {
     static let rulerHeight: CGFloat = 24
-    static let amplitudeBarWidth: CGFloat = 18
 
     let editor: EditorController
     let ruler: RulerView
     let metalView: TimelineMetalView
     let labels: LabelsOverlayView
     let toolStrip = TimelineToolStrip(frame: .zero)
-    let amplitudeBar = ZoomBarView(vertical: true, toolTip: "Vertical zoom (Option Shift scroll). Double click to reset.")
+    let sideBar = TimelineSideBar(frame: .zero)
+    var amplitudeBar: ZoomBarView { sideBar.amplitudeBar }
     private let corner = NSView()
     private(set) var renderer: TimelineRenderer?
     private var displayLink: CADisplayLink?
@@ -37,7 +37,7 @@ final class TimelineView: NSView {
         addSubview(labels)
         addSubview(ruler)
         addSubview(toolStrip)
-        addSubview(amplitudeBar)
+        addSubview(sideBar)
         corner.wantsLayer = true
         corner.layer?.backgroundColor = Theme.chrome.cgColor
         addSubview(corner)
@@ -49,14 +49,16 @@ final class TimelineView: NSView {
         amplitudeBar.value = { [unowned editor] in editor.amplitudeNormalized }
         amplitudeBar.setValue = { [unowned editor] in editor.setAmplitudeNormalized($0) }
         amplitudeBar.reset = { [unowned editor] in editor.setAmplitudeNormalized(0) }
-        toolStrip.snap.isOn = { AppSettings.shared.snapToZeroCrossing }
-        toolStrip.snap.toggle = { [unowned editor] in
+        sideBar.snap.isOn = { AppSettings.shared.snapToZeroCrossing }
+        sideBar.snap.toggle = { [unowned editor] in
             AppSettings.shared.snapToZeroCrossing.toggle()
             editor.needsDisplay?()
         }
 
-        toolStrip.blade.isOn = { [unowned editor] in editor.tool == .blade }
-        toolStrip.blade.toggle = { [unowned editor] in editor.tool = editor.tool == .blade ? .select : .blade }
+        sideBar.select.isOn = { [unowned editor] in editor.tool == .select }
+        sideBar.select.toggle = { [unowned editor] in editor.tool = .select }
+        sideBar.blade.isOn = { [unowned editor] in editor.tool == .blade }
+        sideBar.blade.toggle = { [unowned editor] in editor.tool = editor.tool == .blade ? .select : .blade }
 
         editor.needsDisplay = { [weak self] in self?.setDirty() }
     }
@@ -69,7 +71,7 @@ final class TimelineView: NSView {
     override func layout() {
         super.layout()
         let b = bounds
-        let w = max(0, b.width - Self.amplitudeBarWidth)
+        let w = max(0, b.width - TimelineSideBar.width)
         ruler.frame = NSRect(x: 0, y: 0, width: w, height: Self.rulerHeight)
         let track = NSRect(x: 0, y: Self.rulerHeight, width: w, height: max(0, b.height - Self.rulerHeight))
         metalView.frame = track
@@ -77,8 +79,8 @@ final class TimelineView: NSView {
         toolStrip.frame = NSRect(x: 0, y: track.minY + TimelineLayout.minimapHeight + 1,
                                  width: w, height: TimelineLayout.toolStripHeight - 1)
         let barTop = track.minY + TimelineLayout.trackTop
-        corner.frame = NSRect(x: w, y: 0, width: Self.amplitudeBarWidth, height: barTop)
-        amplitudeBar.frame = NSRect(x: w, y: barTop, width: Self.amplitudeBarWidth, height: max(0, b.height - barTop))
+        corner.frame = NSRect(x: w, y: 0, width: TimelineSideBar.width, height: barTop)
+        sideBar.frame = NSRect(x: w, y: barTop, width: TimelineSideBar.width, height: max(0, b.height - barTop))
         editor.timelineWidth = Double(w)
         setDirty()
     }
@@ -112,7 +114,7 @@ final class TimelineView: NSView {
         metalView.draw()
         ruler.needsDisplay = true
         toolStrip.refresh()
-        amplitudeBar.refreshIfChanged()
+        sideBar.refresh()
         labels.update()
         if tickDurations != nil { tickDurations?.append((CACurrentMediaTime() - t0) * 1000) }
     }

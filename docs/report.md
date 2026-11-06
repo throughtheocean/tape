@@ -547,3 +547,25 @@ Not tested: how the sheet and the preset popover look (the screen was locked, an
 4. Tape quantizes integer output itself, rounding at 24 bit and TPDF at 16 bit, instead of leaving it to the file. Without this, FLAC's encoder rounds differently from the WAV writer and the lossless roundtrip test would differ by an LSB. Dither has a checkbox (on by default); the spec only says to dither when reducing to 16 bit.
 5. The name pattern applies to Each Region. Single files are named in the save panel, with a default of the document name, the region name for Export Region, or the preset's naming rule (mg1).
 6. `{date}` uses YYMMDD, as in the doc naming rule.
+
+## M5 addendum: inspector sidebar and tool bar
+
+Maik's layout request after M5: the inspector moves to a left sidebar that slides in when needed, the waveform gets more height, and the vertical zoom becomes a wider bar with tools under it.
+
+### What was built
+
+- The inspector is a full height sidebar on the left. It slides in and out in 0.2 s. It is toggled by a `sidebar.left` button next to the window buttons in the title bar, or by Option Command I (View menu). A double click on a region still opens it. Its edge can be dragged to set the width (260 to 520 pt), and the width and visibility are remembered.
+- The transport is a fixed bar across the top (record row and transport, 97 pt). Everything below it is timeline, so the waveform has nearly the whole window height. Before, the timeline started at about one third of the window.
+- To the right of the track there is now a 36 pt tool bar: the vertical zoom on top (150 pt, thicker track and larger handle), then the select tool, the blade tool and the snap to zero crossing toggle. The blade and snap buttons moved here from the strip under the minimap, which now holds only the horizontal zoom.
+
+### Tested
+
+- The app was launched and looked at in the real window (a window capture, since the offscreen snapshot does not draw the SwiftUI inspector): the sidebar on the left, the toggle next to the window buttons with the title still centered, the tall waveform, and the tool bar on the right.
+- New script `scripts/selftest/m5-layout.txt`: the sidebar button opens the inspector, Option Command I closes it, a double click on a region opens it again, and the select, blade and snap buttons switch the tool and the snap setting. All passed.
+- 83 tests green, and the M2, M3, M4 and M5 scripts all passed again with the new geometry. The build has no warnings.
+
+### Deviations, with reasons
+
+1. The divider between the top area and the timeline is gone, because the transport now has a fixed height. The timeline always gets the rest.
+2. On a fresh install the inspector starts hidden, since it now slides in when needed. An existing setting is kept.
+3. The title bar button sits next to the window buttons rather than inside the transport bar, which keeps the transport row as it was.

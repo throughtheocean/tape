@@ -1,0 +1,26 @@
+# Layout addendum: inspector sidebar slides in and out, right tool bar buttons.
+wait 1
+import /tmp/tape-m3.wav
+waitLoaded
+fit
+log start
+snapshot /tmp/tape-layout-closed.png
+button sidebar
+wait 0.6
+log sidebar button opens
+snapshot /tmp/tape-layout-open.png
+key cmd+opt+i
+wait 0.6
+log shortcut closes
+mouse click f100000 wave 0 2
+wait 0.6
+log double click on region opens
+button blade
+log blade button
+button select
+log select button
+button snap
+log snap button
+button snap
+log snap button again
+quit

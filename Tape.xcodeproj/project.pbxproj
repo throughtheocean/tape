@@ -10,6 +10,7 @@
 		02C0A7E376901EEC6CC220AC /* HardwarePresets in Frameworks */ = {isa = PBXBuildFile; productRef = 61A3A93CCD7D97A66CF2D5BD /* HardwarePresets */; };
 		05953DA9D39E7850470BF191 /* TimelineRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C6E5C15D1404550C948BCF5 /* TimelineRenderer.swift */; };
 		087C428D740D2D6B23807D13 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E43A217D488DF323AA0EEEA3 /* AppDelegate.swift */; };
+		088A1C6E6CFE006CEA282187 /* SidebarResizeHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6068354885E63A68CCE07E8 /* SidebarResizeHandle.swift */; };
 		0D502DC3A44796A2A0B80B2F /* TransportPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86A48630D1CC175D2F2B4E6D /* TransportPanel.swift */; };
 		192037F86A06C366D92C4FF0 /* EditorController+Edit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 097E061F1D5376DA631D28B4 /* EditorController+Edit.swift */; };
 		21739973EDA4B80B89A8C9F5 /* RecordController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FDAF8C4D9AAD0F76BFB374C /* RecordController.swift */; };
@@ -65,6 +66,7 @@
 		C706A94B2DCF35FA4AF1CD20 /* TapeDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapeDocument.swift; sourceTree = "<group>"; };
 		DD71093FAD9D8D8AF8651895 /* MainWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowController.swift; sourceTree = "<group>"; };
 		E43A217D488DF323AA0EEEA3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		E6068354885E63A68CCE07E8 /* SidebarResizeHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarResizeHandle.swift; sourceTree = "<group>"; };
 		E61EAC9D5F540A45ECD293DA /* ProcessSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessSheet.swift; sourceTree = "<group>"; };
 		EBA048A20C51244AA1C1FB0A /* FadeDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FadeDialog.swift; sourceTree = "<group>"; };
 		F240DEBE3473C566A1142715 /* ExportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportSheet.swift; sourceTree = "<group>"; };
@@ -137,6 +139,7 @@
 				6E4C33FC83E2C6915F8C1C3F /* EditorController.swift */,
 				097E061F1D5376DA631D28B4 /* EditorController+Edit.swift */,
 				DD71093FAD9D8D8AF8651895 /* MainWindowController.swift */,
+				E6068354885E63A68CCE07E8 /* SidebarResizeHandle.swift */,
 			);
 			path = Editor;
 			sourceTree = "<group>";
@@ -293,6 +296,7 @@
 				F7CEBBFF57F50815FDD3D38F /* RegionInspector.swift in Sources */,
 				9B95D4A36B544DA2DDEFCD0B /* SelfTest.swift in Sources */,
 				34A852E77964DEDE6F829DA6 /* Shaders.metal in Sources */,
+				088A1C6E6CFE006CEA282187 /* SidebarResizeHandle.swift in Sources */,
 				E720119E65817EF107EA1B0F /* TapeDocument.swift in Sources */,
 				A87396E038103BA1495C40A3 /* Theme.swift in Sources */,
 				295AA51E63C9D3F4262B3D73 /* TimeFormat.swift in Sources */,

@@ -4,14 +4,12 @@ import SwiftUI
 import TapeCore
 import UniformTypeIdentifiers
 
-/// One document window: transport and inspector on top, timeline full width below.
+/// One document window: inspector sidebar on the left, transport bar and timeline to its right.
 @MainActor
-final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuItemValidation, NSSplitViewDelegate {
+final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuItemValidation {
     let tapeDocument: TapeDocument
     let editor: EditorController
     let timeline: TimelineView
-    private let mainSplit = NSSplitView()
-    private let topSplit = NSSplitView()
     private var subscriptions: Set<AnyCancellable> = []
     var onClose: ((MainWindowController) -> Void)?
 
@@ -52,65 +50,137 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             RecordRow(editor: editor)
             Divider().overlay(Color(nsColor: Theme.separator))
             TransportPanel(editor: editor, document: tapeDocument).frame(height: 52)
-            Spacer(minLength: 0)
         }.background(Color.tapeChrome))
-        let inspector = NSHostingView(rootView: InspectorPanel(editor: editor, document: tapeDocument))
         transport.sizingOptions = []
+        let inspector = NSHostingView(rootView: InspectorPanel(editor: editor, document: tapeDocument))
         inspector.sizingOptions = []
+        inspectorView = inspector
 
-        topSplit.isVertical = true
-        topSplit.dividerStyle = .thin
-        topSplit.delegate = self
-        topSplit.addArrangedSubview(transport)
-        topSplit.addArrangedSubview(inspector)
-        topSplit.setHoldingPriority(.defaultLow, forSubviewAt: 0)
-        topSplit.setHoldingPriority(.defaultLow + 10, forSubviewAt: 1)
+        sidebar.wantsLayer = true
+        sidebar.layer?.masksToBounds = true
+        sidebar.layer?.backgroundColor = Theme.chrome.cgColor
+        sidebarLine.wantsLayer = true
+        sidebarLine.layer?.backgroundColor = Theme.separator.cgColor
+        sidebarHandle.onDrag = { [weak self] dx in self?.resizeInspector(by: dx) }
 
-        mainSplit.isVertical = false
-        mainSplit.dividerStyle = .thin
-        mainSplit.delegate = self
-        mainSplit.addArrangedSubview(topSplit)
-        mainSplit.addArrangedSubview(timeline)
-        mainSplit.autosaveName = "TapeMainSplit"
+        sidebarButton.image = NSImage(systemSymbolName: "sidebar.left", accessibilityDescription: "Inspector")
+        sidebarButton.isBordered = false
+        sidebarButton.contentTintColor = Theme.secondaryText
+        sidebarButton.toolTip = "Show or hide the inspector (Option Command I)"
+        sidebarButton.target = self
+        sidebarButton.action = #selector(toggleInspector(_:))
 
         let content = NSView()
         content.wantsLayer = true
         content.layer?.backgroundColor = Theme.chrome.cgColor
-        mainSplit.translatesAutoresizingMaskIntoConstraints = false
-        content.addSubview(mainSplit)
-        let titlebar: CGFloat = 28
-        NSLayoutConstraint.activate([
-            mainSplit.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            mainSplit.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            mainSplit.topAnchor.constraint(equalTo: content.topAnchor, constant: titlebar),
-            mainSplit.bottomAnchor.constraint(equalTo: content.bottomAnchor),
-        ])
-        window.contentView = content
-        window.layoutIfNeeded()
-
-        if UserDefaults.standard.object(forKey: "NSSplitView Subview Frames TapeMainSplit") == nil {
-            mainSplit.setPosition(window.frame.height / 3, ofDividerAt: 0)
+        for v in [sidebar, sidebarLine, transport, timeline, sidebarHandle] as [NSView] {
+            v.translatesAutoresizingMaskIntoConstraints = false
+            content.addSubview(v)
         }
-        inspector.isHidden = !AppSettings.shared.inspectorVisible
-        applyInspectorWidth()
+        inspector.translatesAutoresizingMaskIntoConstraints = false
+        sidebar.addSubview(inspector)
+
+        let titlebar: CGFloat = 28
+        let width = min(max(CGFloat(AppSettings.shared.inspectorWidth), Self.inspectorWidths.lowerBound),
+                        Self.inspectorWidths.upperBound)
+        let visible = AppSettings.shared.inspectorVisible
+        sidebarWidth = sidebar.widthAnchor.constraint(equalToConstant: visible ? width : 0)
+        inspectorWidth = inspector.widthAnchor.constraint(equalToConstant: width)
+        NSLayoutConstraint.activate([
+            sidebar.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+            sidebar.topAnchor.constraint(equalTo: content.topAnchor, constant: titlebar),
+            sidebar.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            sidebarWidth,
+            inspector.trailingAnchor.constraint(equalTo: sidebar.trailingAnchor),
+            inspector.topAnchor.constraint(equalTo: sidebar.topAnchor),
+            inspector.bottomAnchor.constraint(equalTo: sidebar.bottomAnchor),
+            inspectorWidth,
+
+            sidebarLine.leadingAnchor.constraint(equalTo: sidebar.trailingAnchor),
+            sidebarLine.topAnchor.constraint(equalTo: sidebar.topAnchor),
+            sidebarLine.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            sidebarLine.widthAnchor.constraint(equalToConstant: 1),
+            sidebarHandle.centerXAnchor.constraint(equalTo: sidebarLine.centerXAnchor),
+            sidebarHandle.topAnchor.constraint(equalTo: sidebar.topAnchor),
+            sidebarHandle.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            sidebarHandle.widthAnchor.constraint(equalToConstant: 7),
+
+            transport.leadingAnchor.constraint(equalTo: sidebarLine.trailingAnchor),
+            transport.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            transport.topAnchor.constraint(equalTo: content.topAnchor, constant: titlebar),
+            transport.heightAnchor.constraint(equalToConstant: Self.transportHeight),
+            timeline.leadingAnchor.constraint(equalTo: sidebarLine.trailingAnchor),
+            timeline.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+            timeline.topAnchor.constraint(equalTo: transport.bottomAnchor),
+            timeline.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+        ])
+        inspector.isHidden = !visible
+        sidebarLine.isHidden = !visible
+        sidebarHandle.isHidden = !visible
+        window.contentView = content
+
+        let holder = NSView(frame: NSRect(x: 0, y: 0, width: 34, height: titlebar))
+        sidebarButton.frame = NSRect(x: 6, y: 3, width: 24, height: 22)
+        holder.addSubview(sidebarButton)
+        let accessory = NSTitlebarAccessoryViewController()
+        accessory.view = holder
+        accessory.layoutAttribute = .leading
+        window.addTitlebarAccessoryViewController(accessory)
     }
 
-    override func showWindow(_ sender: Any?) {
-        super.showWindow(sender)
-        window?.layoutIfNeeded()
-        applyInspectorWidth()
+    /// Record row (44), divider, transport (52).
+    static let transportHeight: CGFloat = 97
+    static let inspectorWidths: ClosedRange<CGFloat> = 260...520
+
+    private let sidebar = NSView()
+    private let sidebarLine = NSView()
+    private let sidebarHandle = SidebarResizeHandle()
+    private let sidebarButton = NSButton()
+    var sidebarToggle: NSButton { sidebarButton }
+    private var inspectorView: NSView?
+    private var sidebarWidth: NSLayoutConstraint!
+    private var inspectorWidth: NSLayoutConstraint!
+
+    var isInspectorVisible: Bool { sidebarWidth.constant > 0 }
+
+    private func resizeInspector(by dx: CGFloat) {
+        let w = min(max(inspectorWidth.constant + dx, Self.inspectorWidths.lowerBound), Self.inspectorWidths.upperBound)
+        inspectorWidth.constant = w
+        sidebarWidth.constant = w
+        AppSettings.shared.inspectorWidth = Double(w)
     }
 
-    private func applyInspectorWidth() {
-        guard let inspector = topSplit.arrangedSubviews.last, !inspector.isHidden else { return }
-        topSplit.setPosition(topSplit.bounds.width - CGFloat(AppSettings.shared.inspectorWidth) - topSplit.dividerThickness,
-                             ofDividerAt: 0)
+    /// Slides the inspector in or out from the left.
+    func setInspectorVisible(_ show: Bool, animated: Bool = true) {
+        guard show != isInspectorVisible, let content = window?.contentView else { return }
+        AppSettings.shared.inspectorVisible = show
+        if show {
+            inspectorView?.isHidden = false
+            sidebarLine.isHidden = false
+            sidebarHandle.isHidden = false
+        }
+        let target = show ? inspectorWidth.constant : 0
+        guard animated else {
+            sidebarWidth.constant = target
+            finishInspectorSlide(shown: show)
+            return
+        }
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.2
+            ctx.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            ctx.allowsImplicitAnimation = true
+            sidebarWidth.animator().constant = target
+            content.layoutSubtreeIfNeeded()
+        }, completionHandler: { [weak self] in
+            MainActor.assumeIsolated { self?.finishInspectorSlide(shown: show) }
+        })
     }
 
-    func splitViewDidResizeSubviews(_ notification: Notification) {
-        guard notification.object as? NSSplitView === topSplit, let inspector = topSplit.arrangedSubviews.last,
-              !inspector.isHidden, inspector.frame.width >= 200, window?.isVisible == true else { return }
-        AppSettings.shared.inspectorWidth = Double(inspector.frame.width)
+    private func finishInspectorSlide(shown: Bool) {
+        guard !shown, !isInspectorVisible else { return }
+        inspectorView?.isHidden = true
+        sidebarLine.isHidden = true
+        sidebarHandle.isHidden = true
     }
 
     private func updateTitle() {
@@ -120,20 +190,6 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
 
     func focusTimeline() {
         window?.makeFirstResponder(timeline.metalView)
-    }
-
-    // MARK: Split view
-
-    func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposed: CGFloat, ofSubviewAt index: Int) -> CGFloat {
-        splitView === mainSplit ? max(proposed, 90) : max(proposed, 300)
-    }
-
-    func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposed: CGFloat, ofSubviewAt index: Int) -> CGFloat {
-        splitView === mainSplit ? min(proposed, splitView.bounds.height - 160) : min(proposed, splitView.bounds.width - 220)
-    }
-
-    func splitView(_ splitView: NSSplitView, canCollapseSubview subview: NSView) -> Bool {
-        splitView === topSplit && subview === topSplit.arrangedSubviews.last
     }
 
     // MARK: Window
@@ -381,9 +437,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
 
     /// Shows the inspector if hidden, for double click on a region.
     func revealInspector() {
-        guard let inspector = topSplit.arrangedSubviews.last,
-              inspector.isHidden || topSplit.isSubviewCollapsed(inspector) else { return }
-        toggleInspector(nil)
+        setInspectorVisible(true)
     }
 
     @objc func toggleSnapToZero(_ sender: Any?) {
@@ -392,12 +446,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     }
 
     @objc func toggleInspector(_ sender: Any?) {
-        guard let inspector = topSplit.arrangedSubviews.last else { return }
-        let show = inspector.isHidden || topSplit.isSubviewCollapsed(inspector)
-        inspector.isHidden = !show
-        topSplit.adjustSubviews()
-        AppSettings.shared.inspectorVisible = show
-        applyInspectorWidth()
+        setInspectorVisible(!isInspectorVisible)
     }
 
     /// Single key shortcuts are disabled while a text field edits, so typing works there.
