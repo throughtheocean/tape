@@ -241,6 +241,17 @@ final class ExportTests: XCTestCase {
         XCTAssertEqual(jobs.map(\.url.lastPathComponent), ["Same.wav", "Same 2.wav", "Same 3.wav"])
     }
 
+    /// Selected regions numbered from a chosen start, in timeline order regardless of selection order.
+    func testEachRegionCountsFromStartIndex() {
+        let list = EditList(regions: (0..<4).map { Region(name: "Take", sourceId: src, sourceIn: 0, sourceOut: 10, position: Int64($0) * 20) },
+                            sources: [:], channelCount: 1)
+        let picked = [list.regions[3].id, list.regions[1].id, list.regions[2].id]
+        let jobs = Exporter.jobs(list: list, scope: .eachRegion(picked), directory: dir, fileName: "", pattern: "{region}-{index:02}",
+                                 documentName: "", date: Date(), settings: ExportSettings(), startIndex: 7)
+        XCTAssertEqual(jobs.map(\.url.lastPathComponent), ["Take-07.wav", "Take-08.wav", "Take-09.wav"])
+        XCTAssertEqual(jobs.map(\.span.start), [20, 40, 60])
+    }
+
     // MARK: Progress and cancel
 
     func testCancelLeavesNoFiles() throws {

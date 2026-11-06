@@ -72,10 +72,9 @@ final class TimelineView: NSView {
         sideBar.select.toggle = { [unowned editor] in editor.tool = .select }
         sideBar.blade.isOn = { [unowned editor] in editor.tool == .blade }
         sideBar.blade.toggle = { [unowned editor] in editor.tool = editor.tool == .blade ? .select : .blade }
-        sideBar.laneSize.label = { [unowned editor] in
-            switch editor.laneHeight { case ..<60: return "S"; case ..<120: return "M"; default: return "L" }
-        }
-        sideBar.laneSize.action = { [unowned editor] in editor.cycleLaneHeight() }
+        sideBar.laneBar.value = { [unowned editor] in editor.laneHeightNormalized }
+        sideBar.laneBar.setValue = { [unowned editor] in editor.setLaneHeightNormalized($0) }
+        sideBar.laneBar.reset = { [unowned editor] in editor.laneHeight = EditorController.defaultLaneHeight }
         sideBar.expand.isOn = { [unowned editor] in editor.expandSelected }
         sideBar.expand.toggle = { [unowned editor] in editor.expandSelected.toggle() }
 

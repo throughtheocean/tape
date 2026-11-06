@@ -179,11 +179,11 @@ public enum Exporter {
     // MARK: Jobs
 
     /// The files a scope produces. `fileName` names single-file scopes; `eachRegion` and `stems` use `pattern`.
-    /// `trackNames` fills `{track}`. Duplicate names get " 2", " 3" appended.
+    /// `trackNames` fills `{track}`; `{index}` counts from `startIndex`. Duplicate names get " 2", " 3" appended.
     /// Selections and single regions keep their track's gain and pan and the master, but play even when muted.
     public static func jobs(list: EditList, scope: ExportScope, directory: URL, fileName: String, pattern: String,
                             documentName: String, date: Date, settings: ExportSettings,
-                            trackNames: [UUID: String] = [:]) -> [ExportJob] {
+                            trackNames: [UUID: String] = [:], startIndex: Int = 1) -> [ExportJob] {
         let ext = settings.fileExtension
         func url(_ base: String) -> URL {
             let clean = base.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
@@ -223,7 +223,7 @@ public enum Exporter {
             return [ExportJob(list: sub(regions), span: SampleRange(start: start, end: end), url: url(fileName))]
         case let .eachRegion(ids):
             return only(ids).enumerated().map { i, r in
-                let base = Self.fileName(pattern: pattern, name: documentName, index: i + 1, region: r.name,
+                let base = Self.fileName(pattern: pattern, name: documentName, index: startIndex + i, region: r.name,
                                          track: trackNames[r.trackId] ?? "", date: date)
                 return ExportJob(list: sub([r]), span: r.timelineRange, url: url(unique(base)))
             }
@@ -231,7 +231,7 @@ public enum Exporter {
             let span = SampleRange(start: 0, end: list.length)
             let wanted = Set(ids)
             return list.tracks.filter { wanted.contains($0.id) && !$0.mute }.enumerated().map { i, t in
-                let base = Self.fileName(pattern: pattern, name: documentName, index: i + 1, region: "",
+                let base = Self.fileName(pattern: pattern, name: documentName, index: startIndex + i, region: "",
                                          track: trackNames[t.id] ?? "", date: date)
                 return ExportJob(list: list.stem(t.id), span: span, url: url(unique(base)))
             }

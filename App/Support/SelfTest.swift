@@ -93,13 +93,21 @@ final class SelfTest {
                 editor.tick()
                 try await Task.sleep(nanoseconds: 16_000_000)
             }
+        case "slider":
+            // slider wave|lane <0...1>|reset: moves a tool bar slider as a drag (or double click) would.
+            let bar = args.first == "lane" ? c.timeline.sideBar.laneBar : c.timeline.amplitudeBar
+            if args.count > 1, let v = Double(args[1]) { bar.setValue(v) } else { bar.reset() }
+            c.timeline.layoutSubtreeIfNeeded()
+            write(String(format: "slider %@: laneHeight %.0f waveform zoom %.2f laneBar %@ %.3f", args.joined(separator: " "),
+                         c.editor.laneHeight, c.editor.amplitudeZoom, c.timeline.sideBar.laneBar.isHidden ? "hidden" : "shown",
+                         c.editor.laneHeightNormalized))
         case "button":
             switch args.first {
             case "sidebar": c.sidebarToggle.performClick(nil)
             case "select": c.timeline.sideBar.select.toggle()
             case "blade": c.timeline.sideBar.blade.toggle()
             case "snap": c.timeline.sideBar.snap.toggle()
-            case "lanesize": c.timeline.sideBar.laneSize.action()
+            case "lanesize": c.editor.cycleLaneHeight()
             case "expand": c.timeline.sideBar.expand.toggle()
             case "loudness": c.nextLoudnessReading(nil)
             default: write("no button \(args.first ?? "")")
@@ -360,6 +368,8 @@ final class SelfTest {
         case "pattern":
             let pattern = args.dropFirst().joined(separator: " ")
             if session.scope == .stems { session.stemPattern = pattern } else { session.pattern = pattern }
+        case "start":
+            session.startIndex = Int(args.count > 1 ? args[1] : "") ?? 1
         case "dither":
             session.settings.dither = args.count > 1 && args[1] == "on"
         case "state":
@@ -371,7 +381,7 @@ final class SelfTest {
         let s = session.settings
         write("export: preset \(session.preset?.id ?? "none") locked \(session.isLocked) scope \(session.scope.rawValue) "
               + "\(s.container.rawValue) \(s.sampleFormat.rawValue) \(Int(s.sampleRate)) \(s.layout.rawValue) dither \(s.dither) "
-              + "pattern '\(session.pattern)' summary '\(session.summary)' problem '\(session.problem ?? "")'")
+              + "pattern '\(session.pattern)' start \(session.startIndex) summary '\(session.summary)' problem '\(session.problem ?? "")'")
     }
 
     /// `context <x> <y> [item title]`: opens the timeline context menu there and performs the item.

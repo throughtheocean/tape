@@ -117,6 +117,8 @@ final class EditorController: ObservableObject {
     /// Loudness of what is played; integrated restarts when playback starts or on reset.
     var loudness = ChannelLoudness(sampleRate: 48000, channelCount: 2)
     var loudnessWasPlaying = false
+    /// First `{index}` number offered for Each Region and Stems; numbered exports continue it.
+    var exportStartIndex = 1
 
     static let minSamplesPerPoint = 1.0 / 32
     private var subscriptions: Set<AnyCancellable> = []
@@ -135,7 +137,7 @@ final class EditorController: ObservableObject {
         clock.position = playhead
         multitrack = v.multitrack
         selectedTrackID = v.selectedTrack.flatMap { document.project.track($0)?.id } ?? document.project.tracks[0].id
-        laneHeight = Self.laneHeights.contains(v.laneHeight) ? v.laneHeight : 80
+        laneHeight = v.laneHeight > 0 ? min(max(v.laneHeight, Self.minLaneHeight), Self.maxLaneHeight) : Self.defaultLaneHeight
         expandSelected = v.expandSelected
         laneScroll = v.laneScroll
 

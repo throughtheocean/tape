@@ -46,6 +46,7 @@ key cmd+a
 key cmd+shift+e
 wait 0.5
 export pattern {name}-{index:02}
+export start 1
 export format flac int16 48000 session
 exportto /tmp/tape-m5/each
 sheet return
@@ -56,6 +57,7 @@ files /tmp/tape-m5/each
 key cmd+e
 wait 0.5
 export preset digitakt
+export scope mix
 exportto /tmp/tape-m5/digitakt.wav
 sheet return
 waitExport
@@ -65,6 +67,7 @@ fileinfo /tmp/tape-m5/digitakt.wav
 key cmd+shift+e
 wait 0.5
 export preset morphagene
+export start 1
 exportto /tmp/tape-m5/reels
 sheet return
 waitExport

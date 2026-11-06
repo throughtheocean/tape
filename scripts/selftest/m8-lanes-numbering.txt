@@ -1,0 +1,52 @@
+# M8: lane height slider in the multitrack tool bar, numbered export of selected regions.
+# Sources: /tmp/tape-m6-a.wav and /tmp/tape-m6-b.wav (see docs/report.md, M6). Output goes to /tmp/tape-m8.
+wait 1
+import /tmp/tape-m6-a.wav
+waitLoaded
+import /tmp/tape-m6-b.wav
+waitLoaded
+import /tmp/tape-m6-a.wav
+waitLoaded
+fit
+slider lane 0.5
+log single view: lane slider hidden
+
+key cmd+shift+m
+key cmd+t
+slider wave 0.5
+slider lane 0
+slider lane 1
+slider lane 0.5
+log lanes at the middle of the slider
+snapshot /tmp/tape-m8-lanes.png
+slider lane reset
+slider wave reset
+menu Lane Height
+log Lane Height menu steps to 160
+
+# Three regions selected (multitrack view, all on track 1): the export sheet opens on Each Region; numbers start at 7.
+key cmd+a
+log all selected
+key cmd+e
+wait 0.5
+export state
+export preset none
+export pattern {name}-{index:02}
+export format wav int24 48000 session
+export start 7
+export state
+exportto /tmp/tape-m8/each
+sheet return
+waitExport
+files /tmp/tape-m8/each
+
+# The next export continues with 10.
+key cmd+shift+e
+wait 0.5
+export state
+export start 1
+exportto /tmp/tape-m8/again
+sheet return
+waitExport
+files /tmp/tape-m8/again
+quit

@@ -68,14 +68,16 @@ struct ExportSheet: View {
                 row("File names") {
                     TextField("", text: $session.pattern)
                         .disabled(session.isPatternLocked || session.isExporting)
-                        .help("Tokens: {name} document, {region} region name, {track} track name, {index} or {index:02} position, {date} as YYMMDD")
+                        .help("Tokens: {name} document, {region} region name, {track} track name, {index} or {index:02} number, {date} as YYMMDD")
                 }
+                startRow
             } else if session.scope == .stems {
                 row("File names") {
                     TextField("", text: $session.stemPattern)
                         .disabled(session.isPatternLocked || session.isExporting)
-                        .help("Tokens: {name} document, {track} track name, {index} or {index:02} track position, {date} as YYMMDD")
+                        .help("Tokens: {name} document, {track} track name, {index} or {index:02} number, {date} as YYMMDD")
                 }
+                startRow
             }
             Text(session.summary)
                 .font(.system(size: 11))
@@ -105,6 +107,30 @@ struct ExportSheet: View {
         .font(.system(size: 12))
         .padding(20)
         .frame(width: 460)
+    }
+
+    /// First number for `{index}`; the files count up from it in timeline order.
+    private var startRow: some View {
+        row("Start at") {
+            HStack(spacing: 6) {
+                TextField("", value: $session.startIndex, format: .number.grouping(.never))
+                    .frame(width: 56)
+                    .multilineTextAlignment(.trailing)
+                Stepper("", value: $session.startIndex, in: 0...9999)
+                    .labelsHidden()
+                if !(session.scope == .stems ? session.stemPattern : session.pattern).contains("{index") {
+                    Text("Add {index:02} to the names to number them.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.tapeSecondary)
+                } else {
+                    Text("Counts up per file in timeline order; the next export of this document continues.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color.tapeSecondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .disabled(session.isExporting)
+        }
     }
 
     private var containerBinding: Binding<AudioContainer> {

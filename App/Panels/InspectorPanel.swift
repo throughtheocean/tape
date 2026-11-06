@@ -56,7 +56,7 @@ struct InspectorPanel: View {
         shortcut("B  A", "Blade tool, select tool")
         shortcut("Shift Z", "Fit all")
         shortcut("Option scroll", "Zoom horizontally")
-        shortcut("Option Shift scroll", "Zoom vertically")
+        shortcut("Option Shift scroll", "Waveform height")
         shortcut("N", "Snap to zero crossing")
         shortcut("Home  End", "Start, end")
         shortcut("Command I", "Import audio")

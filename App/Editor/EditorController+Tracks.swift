@@ -21,7 +21,11 @@ struct Lane {
 
 /// Tracks, lanes and meters.
 extension EditorController {
+    /// Steps for Lane Height in the Track menu; the lane height slider sets any height in between.
     static let laneHeights: [Double] = [40, 80, 160]
+    static let minLaneHeight = 40.0
+    static let maxLaneHeight = 400.0
+    static let defaultLaneHeight = 80.0
     static let headerWidth: CGFloat = 180
     /// Master strip and add button under the header column.
     static let masterStripHeight: Double = 64
@@ -127,8 +131,17 @@ extension EditorController {
     }
 
     func cycleLaneHeight() {
-        let i = Self.laneHeights.firstIndex(of: laneHeight) ?? 1
-        laneHeight = Self.laneHeights[(i + 1) % Self.laneHeights.count]
+        laneHeight = Self.laneHeights.first { $0 > laneHeight + 0.5 } ?? Self.laneHeights[0]
+    }
+
+    /// Lane height slider position, 0 (40 pt) to 1 (400 pt), logarithmic.
+    var laneHeightNormalized: Double {
+        log(laneHeight / Self.minLaneHeight) / log(Self.maxLaneHeight / Self.minLaneHeight)
+    }
+
+    func setLaneHeightNormalized(_ value: Double) {
+        let h = Self.minLaneHeight * exp(min(max(value, 0), 1) * log(Self.maxLaneHeight / Self.minLaneHeight))
+        laneHeight = h.rounded()
     }
 
     // MARK: Track commands

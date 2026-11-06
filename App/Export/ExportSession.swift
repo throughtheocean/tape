@@ -12,7 +12,7 @@ enum ExportScopeKind: String, CaseIterable, Identifiable {
         case .mix: return "Mix"
         case .range: return "Range"
         case .selection: return "Selected regions as one file"
-        case .eachRegion: return "Each region as its own file"
+        case .eachRegion: return "Each region as its own file, numbered"
         case .stems: return "Stems, one file per track"
         }
     }
@@ -31,6 +31,8 @@ final class ExportSession: ObservableObject {
     @Published var scope: ExportScopeKind
     @Published var pattern: String
     @Published var stemPattern: String
+    /// First `{index}` number for Each Region and Stems.
+    @Published var startIndex: Int
     @Published private(set) var preset: ExportPreset?
     @Published private(set) var isExporting = false
     @Published private(set) var progress: Double = 0
@@ -45,14 +47,17 @@ final class ExportSession: ObservableObject {
         settings = s.exportSettings
         pattern = s.exportPattern
         stemPattern = s.stemPattern
+        startIndex = editor.exportStartIndex
         self.scope = .mix
         if let onlyRegion {
             self.scope = .selection
             editor.selection = [onlyRegion]
         } else if let scope, availableScopes.contains(scope) {
             self.scope = scope
+        } else if editor.range != nil {
+            self.scope = .range
         } else {
-            self.scope = editor.range != nil ? .range : .mix
+            self.scope = editor.selection.count > 1 ? .eachRegion : .mix
         }
         if let id = s.exportPresetID, let p = ExportPreset.preset(for: id) { applyPreset(p) }
     }
@@ -101,7 +106,7 @@ final class ExportSession: ObservableObject {
         let names = Dictionary(editor.project.tracks.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
         return Exporter.jobs(list: editor.document.editList(), scope: coreScope, directory: directory, fileName: fileName,
                              pattern: scope == .stems ? stemPattern : pattern, documentName: documentName, date: Date(),
-                             settings: settings, trackNames: names)
+                             settings: settings, trackNames: names, startIndex: max(0, startIndex))
     }
 
     /// What the export would write, for the summary line and the preset limits.
@@ -217,6 +222,7 @@ final class ExportSession: ObservableObject {
                 status = String(format: "Exported %d file%@ in %.1f s", urls.count, urls.count == 1 ? "" : "s",
                                 Date().timeIntervalSince(started))
                 lastExported = urls
+                if scope.writesFolder, !jobs.isEmpty { editor.exportStartIndex = max(0, startIndex) + jobs.count }
                 completion(true)
             case let .failure(error):
                 if case TapeError.cancelled = error { status = "Cancelled" } else { status = error.localizedDescription }

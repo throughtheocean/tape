@@ -781,3 +781,51 @@ Maik's feedback: the tool bar with the zoom slider moves to the left, the loudne
 Tests: 102, 5 skipped, 0 failures. The new test plays a -23 dBFS tone on the left only: left bar -23.0, right bar -inf, value -26.0. The EBU tests also check that both bars read the value.
 
 By hand (`m7-loudness` script, with a new left-only part): the -23 dBFS stereo tone reads -23.0 for the value and both bars. The left-only tone reads left -23.0, right -inf, value -26.0. The M6 multitrack script gives the same results as before, including moving a region between lanes, so hit testing follows the moved layout. The only difference is the export format remembered from an earlier run. During the stepped-file part, the target and the reading changed without the script asking. That fits someone clicking the test window. The measured values were not affected.
+
+## M8: Lane height slider, numbered export of selected regions
+
+Maik's feedback after M7, with his screenshot of the multitrack view:
+
+- "in multi i need a second zoom vertical for the track height ... not the waveform ... maybe this can be a bit clearer"
+- "i want a batch output when i select more regions, i want to give them a sequence number at the end for example with automatic counting and start with number i want 07-09 for example"
+
+### What was built
+
+Tool bar:
+
+- In the multitrack view, a second vertical slider under the waveform slider sets the track height from 40 to 400 pt, on a log scale. It replaces the S, M, L button. A double click sets 80 pt. Track > Lane Height still steps through 40, 80 and 160.
+- Each slider has a symbol on top: a waveform for the waveform height, two stacked lanes for the track height. The tooltips say "Waveform height" and "Track height". In the shortcuts list, Option Shift scroll is now "Waveform height".
+- The single view still shows only the waveform slider.
+
+Export:
+
+- The Each Region scope ("Each region as its own file, numbered") has a Start at field with a stepper. `{index}` counts up from that number, one per file, in timeline order. With the default pattern `{name}-{index:02}` and start 7, three regions become `Song-07`, `Song-08` and `Song-09`. The summary line shows the first names before exporting. Stems use the same field.
+- Automatic counting: after a numbered export, the next one in the same document offers the number after the last file (10 after 07 to 09). A new document, or a new launch, starts at 1. The count is not a global setting, so a preset like Morphagene still starts at mg1 in another document.
+- With more than one region selected and no range set, the sheet opens on Each Region. Only the selected regions are exported. With a range set, Range stays the default as before. Export Each Region (Shift Command E) is unchanged.
+- If the pattern has no `{index}`, the sheet says to add `{index:02}` to number the files.
+
+### Tests
+
+103 TapeCore tests, 5 skipped, 0 failures. The new test picks three of four regions out of timeline order with start 7 and pattern `{region}-{index:02}`. The result is `Take-07`, `Take-08` and `Take-09`, in timeline order.
+
+### Tested by hand
+
+New script `scripts/selftest/m8-lanes-numbering.txt`, with three regions on track 1:
+
+- Single view: the track height slider is hidden.
+- Multitrack view: the slider sets 40 pt at the bottom, 400 pt at the top and 126 pt in the middle. The waveform zoom stays at 5.66x the whole time. A double click goes back to 80 pt and does not touch the waveform zoom. Lane Height in the menu then steps to 160.
+- Select All, then Command E: the sheet opens on Each Region. Start 7 shows and writes `Untitled-07.wav`, `Untitled-08.wav` and `Untitled-09.wav`.
+- Opening Export Each Region again offers start 10. With start 1 it writes `Untitled-01.wav` to `Untitled-03.wav`.
+- Snapshot `/tmp/tape-m8-lanes.png`: both sliders with their symbols, and the lanes at 126 pt.
+
+Regression:
+
+- The M3 edit and M6 multitrack scripts give the same results as in M7.
+- The M5 export script writes the same files and formats. It now sets its scope and start number itself, because all regions stay selected after its Each Region step: `export scope mix` for the Digitakt file, and `export start 1` for the Each Region and Morphagene steps.
+- Found and fixed while testing: in my first version, several selected regions beat a set range for the default scope. The range wins again.
+- The test runs share settings with the installed app. A first version of the start number as a global setting leaked between runs. It is now per document, and the test value was removed from the defaults.
+
+### Deviations, with reasons
+
+1. The track height is one height for all lanes, as in M6. The Expand button still makes the selected lane fill the view. Per-track heights would need a drag handle per lane; that idea is in `docs/v2.md`.
+2. The start number is not saved with the document. It lives as long as the window is open.

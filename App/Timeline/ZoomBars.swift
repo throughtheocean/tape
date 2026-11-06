@@ -1,9 +1,12 @@
 import AppKit
 
 /// Slider with a round handle, horizontal or vertical. Value 0...1, double click resets.
+/// A vertical slider with a symbol shows it above the track as its label.
 @MainActor
 final class ZoomBarView: NSView {
     let vertical: Bool
+    private let symbolName: String?
+    private var symbolHeight: CGFloat { vertical && symbolName != nil ? 18 : 0 }
     var value: () -> Double = { 0 }
     var setValue: (Double) -> Void = { _ in }
     var reset: () -> Void = {}
@@ -16,8 +19,9 @@ final class ZoomBarView: NSView {
         if abs(value() - drawnValue) > 1e-4 { needsDisplay = true }
     }
 
-    init(vertical: Bool, toolTip: String) {
+    init(vertical: Bool, symbol: String? = nil, toolTip: String) {
         self.vertical = vertical
+        symbolName = symbol
         super.init(frame: .zero)
         self.toolTip = toolTip
     }
@@ -31,7 +35,8 @@ final class ZoomBarView: NSView {
     /// Track from `start` to `end` along the main axis; for vertical bars 1 is at the top.
     private var track: (start: CGFloat, end: CGFloat) {
         let length = vertical ? bounds.height : bounds.width
-        return (inset + handleSize / 2, max(inset + handleSize / 2, length - inset - handleSize / 2))
+        let start = symbolHeight + inset + handleSize / 2
+        return (start, max(start, length - inset - handleSize / 2))
     }
 
     private func position(for v: Double) -> CGFloat {
@@ -67,6 +72,18 @@ final class ZoomBarView: NSView {
             : NSRect(x: p - handleSize / 2, y: mid - handleSize / 2, width: handleSize, height: handleSize)
         NSColor(white: 0.92, alpha: 1).setFill()
         NSBezierPath(ovalIn: knob).fill()
+        if let symbolName, vertical,
+           let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: toolTip)?
+               .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 11, weight: .medium)) {
+            let tinted = NSImage(size: symbol.size, flipped: false) { rect in
+                symbol.draw(in: rect)
+                Theme.secondaryText.set()
+                rect.fill(using: .sourceAtop)
+                return true
+            }
+            tinted.draw(in: NSRect(x: (bounds.width - symbol.size.width) / 2, y: 4 + (14 - symbol.size.height) / 2,
+                                   width: symbol.size.width, height: symbol.size.height))
+        }
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -193,43 +210,6 @@ final class SymbolToolButton: NSView {
     }
 }
 
-/// Button showing a short text that changes with state, used for the lane height.
-@MainActor
-final class TextToolButton: NSView {
-    var label: () -> String = { "" }
-    var action: () -> Void = {}
-    private var drawnLabel: String?
-
-    init(toolTip: String) {
-        super.init(frame: .zero)
-        self.toolTip = toolTip
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError() }
-
-    override var isFlipped: Bool { true }
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-
-    func refreshIfChanged() {
-        if drawnLabel != label() { needsDisplay = true }
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let text = label()
-        drawnLabel = text
-        let box = bounds.insetBy(dx: 1, dy: 2)
-        NSColor(white: 1, alpha: 0.06).setFill()
-        NSBezierPath(roundedRect: box, xRadius: 4, yRadius: 4).fill()
-        HeaderDrawing.text(text, in: box, size: 11, color: Theme.secondaryText, align: .center, weight: .semibold, mono: false)
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        action()
-        needsDisplay = true
-    }
-}
-
 /// Strip under the minimap with the horizontal zoom, right aligned.
 @MainActor
 final class TimelineToolStrip: NSView {
@@ -263,30 +243,37 @@ final class TimelineToolStrip: NSView {
     }
 }
 
-/// Vertical bar at the left edge: vertical zoom on top, tools below.
+/// Vertical bar at the left edge: waveform height on top, in the multitrack view lane height below it, then tools.
 @MainActor
 final class TimelineSideBar: NSView {
     static let width: CGFloat = 36
     static let zoomHeight: CGFloat = 150
 
-    let amplitudeBar = ZoomBarView(vertical: true, toolTip: "Vertical zoom (Option Shift scroll). Double click to reset.")
+    let amplitudeBar = ZoomBarView(vertical: true, symbol: "waveform",
+                                   toolTip: "Waveform height (Option Shift scroll). Double click to reset.")
+    let laneBar = ZoomBarView(vertical: true, symbol: "rectangle.split.1x2",
+                              toolTip: "Track height in the multitrack view, 40 to 400 points. Double click for 80.")
     let select = SymbolToolButton(symbol: "cursorarrow", toolTip: "Select tool (A)")
     let blade = SymbolToolButton(symbol: "scissors", toolTip: "Blade tool (B). Click a region to cut it. A returns to the select tool.")
     let snap = SnapToZeroButton(frame: .zero)
-    let laneSize = TextToolButton(toolTip: "Lane height in the multitrack view: 40, 80 or 160 points")
     let expand = SymbolToolButton(symbol: "arrow.up.and.down", toolTip: "Expand the selected track")
-    /// Lane buttons only show in the multitrack view.
+    /// The lane height slider and the expand button only show in the multitrack view.
     var showsLaneTools = false {
         didSet { if oldValue != showsLaneTools { needsLayout = true; needsDisplay = true } }
     }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        for v in [amplitudeBar, select, blade, snap, laneSize, expand] as [NSView] { addSubview(v) }
+        for v in [amplitudeBar, laneBar, select, blade, snap, expand] as [NSView] { addSubview(v) }
     }
 
+    private var buttonCount: Int { showsLaneTools ? 4 : 3 }
+
+    /// Height of each slider; two share the space in the multitrack view.
     private var zoomHeight: CGFloat {
-        min(Self.zoomHeight, max(60, bounds.height - (showsLaneTools ? 170 : 110)))
+        let sliders: CGFloat = showsLaneTools ? 2 : 1
+        let free = bounds.height - CGFloat(buttonCount) * 30 - 20 - (sliders - 1) * 9
+        return min(Self.zoomHeight, max(60, free / sliders))
     }
 
     @available(*, unavailable)
@@ -300,9 +287,13 @@ final class TimelineSideBar: NSView {
         let zoom = zoomHeight
         amplitudeBar.frame = NSRect(x: 0, y: 0, width: w, height: zoom)
         var y = zoom + 9
-        laneSize.isHidden = !showsLaneTools
+        laneBar.isHidden = !showsLaneTools
         expand.isHidden = !showsLaneTools
-        for button in [select, blade, snap, laneSize, expand] as [NSView] where !button.isHidden {
+        if showsLaneTools {
+            laneBar.frame = NSRect(x: 0, y: y, width: w, height: zoom)
+            y += zoom + 9
+        }
+        for button in [select, blade, snap, expand] as [NSView] where !button.isHidden {
             button.frame = NSRect(x: 2, y: y, width: w - 4, height: 28)
             y += 30
         }
@@ -314,14 +305,15 @@ final class TimelineSideBar: NSView {
         Theme.separator.setFill()
         NSRect(x: bounds.width - 1, y: 0, width: 1, height: bounds.height).fill()
         NSRect(x: 6, y: zoomHeight + 4, width: bounds.width - 12, height: 1).fill()
+        if showsLaneTools { NSRect(x: 6, y: 2 * zoomHeight + 13, width: bounds.width - 12, height: 1).fill() }
     }
 
     func refresh() {
         amplitudeBar.refreshIfChanged()
+        laneBar.refreshIfChanged()
         select.refreshIfChanged()
         blade.refreshIfChanged()
         snap.refreshIfChanged()
-        laneSize.refreshIfChanged()
         expand.refreshIfChanged()
     }
 }
