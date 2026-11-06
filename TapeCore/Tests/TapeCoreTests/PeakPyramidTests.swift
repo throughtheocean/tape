@@ -86,4 +86,18 @@ final class PeakPyramidTests: XCTestCase {
         try Data(repeating: 7, count: 1000).write(to: url)
         XCTAssertThrowsError(try PeakPyramid.read(from: url))
     }
+
+    /// AVAudioFile returns mono float32 WAV in multiples of 1024 frames; the last partial block must still be read.
+    func testMonoFloatFileTailIsRead() throws {
+        let n = 48000
+        let s = (0..<n).map { 0.25 + Float($0 % 7) / 100 }
+        let url = TestAudio.tempDirectory().appendingPathComponent("tail.wav")
+        try TestAudio.write([s], sampleRate: 48000, to: url, bitDepth: 32)
+        let pyramid = try PeakPyramid.build(url: url)
+        let last = pyramid.minMax(level: 0, block: pyramid.levels[0].blockCount - 1, channel: 0)
+        XCTAssertEqual(last.min, 0.25, accuracy: 1e-6)
+        let out = SampleBuffer(channelCount: 1, capacity: n)
+        try FileSource(url: url).read(start: 0, count: n, into: out, offset: 0)
+        XCTAssertEqual(out.toArrays(count: n)[0], s)
+    }
 }

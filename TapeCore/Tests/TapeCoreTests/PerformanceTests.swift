@@ -47,6 +47,32 @@ final class PerformanceTests: XCTestCase {
         try time("AU compressor 10 min offline") { _ = try Dynamics.compressor().render(input: buffer, range: buffer.all) }
     }
 
+    /// Export of 10 minutes of 48 kHz stereo through the engine in manual rendering mode.
+    func testExportTimeForTenMinutes() throws {
+        guard ProcessInfo.processInfo.environment["TAPE_PERF"] == "1" else { throw XCTSkip("set TAPE_PERF=1") }
+        let rate = 48000.0, frames = 10 * 60 * 48000
+        let channels = (0..<2).map { c in
+            (0..<frames).map { i in Float(0.3 * sin(2 * Double.pi * (220 + 110 * Double(c)) * Double(i) / rate)) }
+        }
+        let id = UUID()
+        let region = Region(name: "Long", sourceId: id, sourceIn: 0, sourceOut: Int64(frames), position: 0)
+        let list = EditList(regions: [region], sources: [id: MemorySource(samples: channels)], channelCount: 2)
+        let dir = TestAudio.tempDirectory()
+        for (label, settings) in [
+            ("WAV 24 bit 48 kHz", ExportSettings(container: .wav, sampleFormat: .int24, sampleRate: 48000)),
+            ("WAV 16 bit 44.1 kHz dithered", ExportSettings(container: .wav, sampleFormat: .int16, sampleRate: 44100)),
+            ("FLAC 24 bit 96 kHz", ExportSettings(container: .flac, sampleFormat: .int24, sampleRate: 96000)),
+            ("AAC 256 kbps", ExportSettings(container: .aac, sampleRate: 48000)),
+        ] {
+            let jobs = Exporter.jobs(list: list, scope: .document, directory: dir, fileName: label, pattern: "", documentName: "",
+                                     date: Date(), settings: settings)
+            let t0 = CFAbsoluteTimeGetCurrent()
+            try Exporter.export(jobs, sessionRate: rate, settings: settings)
+            let elapsed = CFAbsoluteTimeGetCurrent() - t0
+            print("PERF export 10 min \(label): \(String(format: "%.2f", elapsed)) s (\(String(format: "%.0f", 600 / elapsed))x real time)")
+        }
+    }
+
     /// 48 kHz stereo 24 bit WAV of a swept sine with noise, cached in /tmp.
     static func longFile(hours: Double) throws -> URL {
         let url = URL(fileURLWithPath: "/tmp/tape-perf-\(hours)h.wav")

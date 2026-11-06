@@ -87,6 +87,23 @@ extension TimelineMetalView {
         return .empty
     }
 
+    /// Right click on a region selects it (unless it is already part of the selection) and offers Export Region.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let p = convert(event.locationInWindow, from: nil)
+        guard editor.samplesPerPoint > 0, p.y >= TimelineLayout.minimapHeight else { return nil }
+        let region: Region
+        switch hitTest(at: p, option: false) {
+        case let .body(r), let .edge(r, _), let .handle(r, _), let .mid(r, _): region = r
+        case .empty: return nil
+        }
+        if !editor.selection.contains(region.id) { editor.selection = [region.id] }
+        let menu = NSMenu()
+        let item = NSMenuItem(title: "Export Region...", action: #selector(MainWindowController.exportRegion(_:)), keyEquivalent: "")
+        item.representedObject = region.id
+        menu.addItem(item)
+        return menu
+    }
+
     private func frameAt(_ p: CGPoint) -> Int64 {
         max(0, Int64(editor.frame(forX: Double(p.x)).rounded()))
     }

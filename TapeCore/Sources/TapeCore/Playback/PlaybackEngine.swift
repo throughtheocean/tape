@@ -104,23 +104,36 @@ public final class PlaybackEngine: @unchecked Sendable {
     /// Pulls `frames` of transport output in manual rendering mode. Waits for the producer
     /// before each block so the result does not depend on thread timing.
     public func renderManual(frames: Int) throws -> [[Float]] {
-        precondition(isManual, "configure with manualRendering first")
-        let format = engine.manualRenderingFormat
-        let block = 512
-        let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(block))!
+        let buffer = makeManualBuffer()
         var out = [[Float]](repeating: [], count: channelCount)
         var done = 0
         while done < frames {
-            let n = min(block, frames - done)
-            waitForProducer(frames: n)
-            let status = try engine.renderOffline(AVAudioFrameCount(n), to: buffer)
-            guard status == .success else { throw TapeError.unreadable(URL(fileURLWithPath: "/"), "Manual render status \(status.rawValue)") }
+            let n = min(Self.manualBlock, frames - done)
+            try renderManual(frames: n, into: buffer)
             for c in 0..<channelCount {
                 out[c].append(contentsOf: UnsafeBufferPointer(start: buffer.floatChannelData![c], count: Int(buffer.frameLength)))
             }
             done += n
         }
         return out
+    }
+
+    /// Largest block `renderManual(frames:into:)` takes.
+    public static let manualBlock = 512
+
+    /// A buffer in the manual rendering format, `manualBlock` frames.
+    public func makeManualBuffer() -> AVAudioPCMBuffer {
+        AVAudioPCMBuffer(pcmFormat: engine.manualRenderingFormat, frameCapacity: AVAudioFrameCount(Self.manualBlock))!
+    }
+
+    /// Pulls one block (at most `manualBlock` frames) of transport output into `buffer`.
+    public func renderManual(frames n: Int, into buffer: AVAudioPCMBuffer) throws {
+        precondition(isManual, "configure with manualRendering first")
+        waitForProducer(frames: n)
+        let status = try engine.renderOffline(AVAudioFrameCount(n), to: buffer)
+        guard status == .success else { throw TapeError.failed("Manual render status \(status.rawValue)") }
+        // Offline, the ring drains as fast as this is called; without a wake the producer refills every 2 ms.
+        wake.signal()
     }
 
     private func waitForProducer(frames: Int) {

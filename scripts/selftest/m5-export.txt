@@ -1,0 +1,123 @@
+# M5: export through the sheet, every scope, presets, right click Export Region, split, lossless and AAC.
+# Source: /tmp/tape-m3.wav (6 s stereo 220 Hz, see M3). Output goes to /tmp/tape-m5.
+wait 1
+import /tmp/tape-m3.wav
+waitLoaded
+fit
+locate f96000
+key cmd+b
+locate f192000
+key cmd+b
+key cmd+a
+key f
+mouse click f150000 wave
+key cmd+a
+log three regions with default fades
+
+# Whole document as 32 bit float WAV: must equal the edit list render sample for sample.
+key opt+x
+key cmd+e
+wait 0.5
+export preset none
+export scope document
+export format wav float32 48000 session
+exportto /tmp/tape-m5/document.wav
+sheet return
+waitExport
+fileinfo /tmp/tape-m5/document.wav
+compare /tmp/tape-m5/document.wav
+
+# A Shift marked range as 24 bit WAV at 44.1 kHz (rate conversion).
+mouse down f30000 wave shift
+mouse drag f60000 wave shift
+mouse up f60000 wave shift
+key cmd+e
+wait 0.5
+export state
+export format wav int24 44100 session
+exportto /tmp/tape-m5/range.wav
+sheet return
+waitExport
+fileinfo /tmp/tape-m5/range.wav
+key opt+x
+
+# Each region as 16 bit FLAC with the default naming pattern.
+key cmd+a
+key cmd+shift+e
+wait 0.5
+export pattern {name}-{index:02}
+export format flac int16 48000 session
+exportto /tmp/tape-m5/each
+sheet return
+waitExport
+files /tmp/tape-m5/each
+
+# Digitakt preset: fields lock to 48 kHz, 16 bit, mono.
+key cmd+e
+wait 0.5
+export preset digitakt
+exportto /tmp/tape-m5/digitakt.wav
+sheet return
+waitExport
+fileinfo /tmp/tape-m5/digitakt.wav
+
+# Morphagene preset with each region: names are mg1 to mg3, float 48 kHz stereo.
+key cmd+shift+e
+wait 0.5
+export preset morphagene
+exportto /tmp/tape-m5/reels
+sheet return
+waitExport
+files /tmp/tape-m5/reels
+fileinfo /tmp/tape-m5/reels/mg2.wav
+
+# Right click on the middle region: Export Region, as CAF float; equals that region rendered alone.
+context f150000 wave Export Region...
+wait 0.5
+export preset none
+export format caf float32 48000 session
+exportto /tmp/tape-m5/region.caf
+sheet return
+waitExport
+compare /tmp/tape-m5/region.caf region
+
+# Split channels, 24 bit AIFF at 96 kHz.
+key cmd+e
+wait 0.5
+export scope document
+export format aiff int24 96000 split
+exportto /tmp/tape-m5/split.aif
+sheet return
+waitExport
+files /tmp/tape-m5
+fileinfo /tmp/tape-m5/split-L.aif
+
+# ALAC 24 bit and AAC.
+key cmd+e
+wait 0.5
+export format alac int24 48000 session
+exportto /tmp/tape-m5/alac.m4a
+sheet return
+waitExport
+fileinfo /tmp/tape-m5/alac.m4a
+key cmd+e
+wait 0.5
+export format aac float32 48000 session
+exportto /tmp/tape-m5/aac.m4a
+sheet return
+waitExport
+fileinfo /tmp/tape-m5/aac.m4a
+
+# Escape closes the sheet without exporting. Then restore the default settings for the next real export.
+key cmd+e
+wait 0.5
+sheet escape
+wait 0.3
+log escape
+key cmd+e
+wait 0.5
+export format wav int24 48000 session
+exportto /tmp/tape-m5/defaults.wav
+sheet return
+waitExport
+quit

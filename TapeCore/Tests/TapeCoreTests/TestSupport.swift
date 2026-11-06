@@ -43,7 +43,7 @@ enum TestAudio {
     static func read(_ url: URL) throws -> [[Float]] {
         let file = try AVAudioFile(forReading: url)
         let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length))!
-        try file.read(into: buffer)
+        try file.readFully(into: buffer, frameCount: AVAudioFrameCount(file.length))
         return (0..<Int(buffer.format.channelCount)).map {
             Array(UnsafeBufferPointer(start: buffer.floatChannelData![$0], count: Int(buffer.frameLength)))
         }

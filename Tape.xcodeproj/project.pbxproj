@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		02C0A7E376901EEC6CC220AC /* HardwarePresets in Frameworks */ = {isa = PBXBuildFile; productRef = 61A3A93CCD7D97A66CF2D5BD /* HardwarePresets */; };
 		05953DA9D39E7850470BF191 /* TimelineRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C6E5C15D1404550C948BCF5 /* TimelineRenderer.swift */; };
 		087C428D740D2D6B23807D13 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E43A217D488DF323AA0EEEA3 /* AppDelegate.swift */; };
 		0D502DC3A44796A2A0B80B2F /* TransportPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86A48630D1CC175D2F2B4E6D /* TransportPanel.swift */; };
@@ -27,8 +28,10 @@
 		A87396E038103BA1495C40A3 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48E068AC01D2C3FDC47FE76D /* Theme.swift */; };
 		B15AF3F27745C0A2A9DB0F14 /* ProcessSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61EAC9D5F540A45ECD293DA /* ProcessSheet.swift */; };
 		BA879C266495C130A230355A /* EditorController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E4C33FC83E2C6915F8C1C3F /* EditorController.swift */; };
+		D5F29CF5DF61F404B2480C7F /* ExportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F240DEBE3473C566A1142715 /* ExportSheet.swift */; };
 		DB1E6DCCF78F6DBE5B09A6EF /* Benchmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6E6CC35575F8BC4EA331E2F /* Benchmark.swift */; };
 		E720119E65817EF107EA1B0F /* TapeDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = C706A94B2DCF35FA4AF1CD20 /* TapeDocument.swift */; };
+		F43FC7F71D0E43740C47CEA3 /* ExportSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8B0B74AB56E1FE9C1A558BF /* ExportSession.swift */; };
 		F5FA68136B342E6D25633B48 /* MainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD71093FAD9D8D8AF8651895 /* MainWindowController.swift */; };
 		F75879D83194554262292096 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A973D8F2201B19458E321BDB /* AppSettings.swift */; };
 		F7CEBBFF57F50815FDD3D38F /* RegionInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB81A6302F5CC78B60F90F2E /* RegionInspector.swift */; };
@@ -64,6 +67,8 @@
 		E43A217D488DF323AA0EEEA3 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		E61EAC9D5F540A45ECD293DA /* ProcessSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProcessSheet.swift; sourceTree = "<group>"; };
 		EBA048A20C51244AA1C1FB0A /* FadeDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FadeDialog.swift; sourceTree = "<group>"; };
+		F240DEBE3473C566A1142715 /* ExportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportSheet.swift; sourceTree = "<group>"; };
+		F8B0B74AB56E1FE9C1A558BF /* ExportSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportSession.swift; sourceTree = "<group>"; };
 		FCA1C440CBE4A34CAB9F6C44 /* TimelineInteraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineInteraction.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -73,12 +78,22 @@
 			buildActionMask = 2147483647;
 			files = (
 				F900097B1A73E9B82EC29D95 /* TapeCore in Frameworks */,
+				02C0A7E376901EEC6CC220AC /* HardwarePresets in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		5DD9EF9E5CA7A5C231A97E7F /* Export */ = {
+			isa = PBXGroup;
+			children = (
+				F8B0B74AB56E1FE9C1A558BF /* ExportSession.swift */,
+				F240DEBE3473C566A1142715 /* ExportSheet.swift */,
+			);
+			path = Export;
+			sourceTree = "<group>";
+		};
 		674D841883CDDCBD46B477C9 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
@@ -156,6 +171,7 @@
 				758B0F2C8BCA03D08FC49E71 /* Tape.entitlements */,
 				EF3899F8C30315655F271711 /* Document */,
 				B13DE3A353368127125D8F23 /* Editor */,
+				5DD9EF9E5CA7A5C231A97E7F /* Export */,
 				C9FE7E77B612BC54C60EE31D /* Panels */,
 				E3F31F20FD764FD0C513D782 /* Process */,
 				9F12A1361BF1D4311BBD617D /* Record */,
@@ -211,6 +227,7 @@
 			name = Tape;
 			packageProductDependencies = (
 				7F00CDFB6F11376B32650AE9 /* TapeCore */,
+				61A3A93CCD7D97A66CF2D5BD /* HardwarePresets */,
 			);
 			productName = Tape;
 			productReference = 8584A24172F167D789D40B89 /* Tape.app */;
@@ -263,6 +280,8 @@
 				DB1E6DCCF78F6DBE5B09A6EF /* Benchmark.swift in Sources */,
 				192037F86A06C366D92C4FF0 /* EditorController+Edit.swift in Sources */,
 				BA879C266495C130A230355A /* EditorController.swift in Sources */,
+				F43FC7F71D0E43740C47CEA3 /* ExportSession.swift in Sources */,
+				D5F29CF5DF61F404B2480C7F /* ExportSheet.swift in Sources */,
 				882AE7F859184C1CF43830C2 /* FadeDialog.swift in Sources */,
 				297E4B5A7C85271E55869AC3 /* InspectorPanel.swift in Sources */,
 				322B1BB7B723FB52F7E89611 /* MainMenu.swift in Sources */,
@@ -494,6 +513,10 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		61A3A93CCD7D97A66CF2D5BD /* HardwarePresets */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = HardwarePresets;
+		};
 		7F00CDFB6F11376B32650AE9 /* TapeCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = TapeCore;

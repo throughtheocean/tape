@@ -148,7 +148,7 @@ public final class PeakPyramid: @unchecked Sendable {
             let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(chunkFrames))!
             return { start, count in
                 file.framePosition = start
-                try file.read(into: buffer, frameCount: AVAudioFrameCount(count))
+                try file.readFully(into: buffer, frameCount: AVAudioFrameCount(count))
                 let got = Int(buffer.frameLength)
                 if got < count, let data = buffer.floatChannelData {
                     for c in 0..<Int(buffer.format.channelCount) { (data[c] + got).update(repeating: 0, count: count - got) }

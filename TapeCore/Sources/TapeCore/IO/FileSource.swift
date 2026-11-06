@@ -111,7 +111,7 @@ public final class FileSource: SampleSource, @unchecked Sendable {
         let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(Self.blockFrames))!
         file.framePosition = index * Int64(Self.blockFrames)
         do {
-            try file.read(into: buffer, frameCount: AVAudioFrameCount(Self.blockFrames))
+            try file.readFully(into: buffer, frameCount: AVAudioFrameCount(Self.blockFrames))
         } catch {
             buffer.frameLength = 0
         }

@@ -310,6 +310,46 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         window.beginSheet(sheet)
     }
 
+    // MARK: Export
+
+    private var exportSheet: NSWindow?
+    private(set) var exportSession: ExportSession?
+    /// Self-test: export here instead of asking with a panel.
+    var exportDestination: URL?
+    private(set) var lastExportStatus = ""
+
+    @objc func showExport(_ sender: Any?) { presentExport(scope: nil, region: nil) }
+    @objc func showExportEachRegion(_ sender: Any?) { presentExport(scope: .eachRegion, region: nil) }
+
+    /// Right click on a region: export just that region.
+    @objc func exportRegion(_ sender: Any?) {
+        guard let id = (sender as? NSMenuItem)?.representedObject as? UUID else { return }
+        presentExport(scope: nil, region: id)
+    }
+
+    private func presentExport(scope: ExportScopeKind?, region: UUID?) {
+        guard let window, exportSheet == nil, window.attachedSheet == nil else { return }
+        let session = ExportSession(editor: editor, scope: scope, onlyRegion: region)
+        let close: () -> Void = { [weak self] in
+            guard let self, let sheet = self.exportSheet else { return }
+            window.endSheet(sheet)
+            self.exportSheet = nil
+            self.exportSession = nil
+        }
+        let view = ExportSheet(session: session, export: { [weak self] in
+            guard let self, let sheet = self.exportSheet else { return }
+            session.chooseAndExport(in: sheet, destination: self.exportDestination) { ok in
+                self.lastExportStatus = session.status
+                if ok { close() }
+            }
+        }, close: close)
+        let sheet = NSWindow(contentViewController: NSHostingController(rootView: view))
+        sheet.appearance = NSAppearance(named: .darkAqua)
+        exportSheet = sheet
+        exportSession = session
+        window.beginSheet(sheet)
+    }
+
     @objc func consolidate(_ sender: Any?) {
         tapeDocument.consolidate { [weak self] error in
             if let error { self?.showError("Consolidate failed: \(error.localizedDescription)") }
@@ -391,6 +431,8 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             return !editor.selectedIDs.isEmpty
         case #selector(bladeRegions(_:)), #selector(selectAll(_:)):
             return !tapeDocument.project.regions.isEmpty
+        case #selector(showExport(_:)), #selector(exportRegion(_:)), #selector(showExportEachRegion(_:)):
+            return window?.attachedSheet == nil && !RecordController.shared.isRecording && !editor.project.regions.isEmpty
         case #selector(showProcess(_:)):
             return processSheet == nil && fadeSheet == nil && !RecordController.shared.isRecording && ProcessSession.canProcess(editor)
         case #selector(consolidate(_:)):

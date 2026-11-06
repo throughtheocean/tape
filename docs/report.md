@@ -437,3 +437,113 @@ Not tested, because the screen was locked: how the sheets look and how preview s
 6. Trim Silence is a region trim, so it is not destructive and needs no new file. The spec says it applies at region ends, and the source stays untouched.
 7. Resample has no preview: there is nothing to hear at the session rate except the converter's filtering.
 8. Clean Up Sources also deletes files in `sources/` that no source references (for example, results of undone processes). That is what keeps a package from growing with every Apply and undo.
+
+## M5: Export
+
+### What was built
+
+TapeCore (`Export/`):
+
+- `Exporter` renders through its own `PlaybackEngine` in manual rendering mode. That is the same producer, ring and source node as playback, so there is no second render path.
+  - Blocks stream to the files, so memory use does not grow with length.
+  - Rate conversion: `AVAudioConverter` at maximum quality (mastering algorithm), with the output length exactly the source length times the rate ratio.
+  - Files are written under a hidden temporary name and moved into place when complete. On error or cancel nothing is left behind, including files already finished in a multi-file export.
+- Formats: WAV, AIFF, CAF (16, 24, 32 float), FLAC, ALAC (16, 24), AAC (128 to 320 kbit per second). Rates 44.1, 48, 88.2, 96, 176.4 and 192 kHz.
+- Integer output is rounded to its grid by Tape, with TPDF dither (plus or minus 1 LSB) at 16 bit, so every container stores the same values.
+- Channel layouts: as session, mono (average of the channels), stereo (needed by presets: a mono session is duplicated), split to one file per channel (`-L`/`-R`, or `-1`, `-2`... for more channels).
+- Scopes:
+  - Whole document.
+  - Range.
+  - Selected regions as one file: only those regions, over their span.
+  - Each region as its own file, in timeline order.
+- Naming: `{name}` (document), `{region}`, `{index}` or `{index:02}` (zero padded), `{date}` (YYMMDD). Default `{name}-{index:02}`. Unknown tokens stay as typed. Duplicate names get " 2", " 3".
+- `HardwarePresets`: a library target in the TapeCore package. It holds PolyTracker's `ExportPreset.swift` copied in (three standard presets, Digitakt, SP-404, Morphagene Reel, two Octatrack Chain presets), with the limits from PolyTracker's `ChainBuilder`. Each preset maps to export settings and checks its limits:
+  - Morphagene: at most 174 s per file, at most 9 files, named `mg1` to `mg9`.
+  - Octatrack: at most 64 files.
+- `PlaybackEngine.renderManual(frames:into:)` renders one block. In manual mode it now wakes the producer after every block; before, the producer refilled every 2 ms and offline export ran at 20x real time instead of about 1000x.
+
+Tape.app:
+
+- File > Export... (Cmd E) and File > Export Each Region... (Cmd Shift E). A right click on a region selects it and offers Export Region..., which exports that region alone, named after it.
+- The export sheet has:
+  - Preset (a popover grouped as Standard, Hardware and Chain / Reel, plus None).
+  - Format, Bit depth (or Bit rate for AAC), Sample rate (the session rate is marked), Channels, and a TPDF dither checkbox (16 bit only).
+  - Scope, and the file name pattern for Each Region.
+  - A summary of the files it will write (count, total length, first names), and a warning when there is nothing to export or a preset limit is exceeded. Export stays disabled while that warning shows.
+- A preset locks format, rate, bit depth and channels, plus the file names where the preset defines them. The sheet says why ("Morphagene Reel expects WAV, 48 kHz, 32-bit float, stereo. Morphagene reels are at most 174 s and must be named mg1 to mg9 on the card."). None unlocks the fields and restores the user's pattern.
+- Export asks for a file (single file scopes) or a folder (Each Region), then runs off the main thread with a progress bar. Cancel stops it, and Escape closes the sheet.
+- The last settings, pattern and preset are remembered.
+
+Found and fixed on the way (M1 code): `AVAudioFile.read` returns mono float32 WAV in multiples of 1024 frames. The peak pyramid build therefore showed the last block of such files as silence. `AVAudioFile.readFully` now reads until the request is filled. `FileSource` and the pyramid use it, and a regression test covers it.
+
+### Measured numbers
+
+- Export equals playback: a float export of an edited document (three regions, fades with blended shapes, gain, a gap) is identical to the engine's playback render and to the `EditListRenderer` render. The maximum difference is 0, for every sample.
+- Roundtrips:
+  - CAF float: identical to the render.
+  - WAV 24 bit: within half an LSB of the render.
+  - AIFF 24, FLAC 24 and ALAC 24: identical to WAV 24.
+  - FLAC 16 and ALAC 16: identical to WAV 16.
+- Dither at 16 bit, 997 Hz sine at -60 dBFS: the error is 0.502 LSB RMS (TPDF theory: 0.5), with a correlation of -0.00004 to the signal. A sine of 0.3 LSB comes out as noise with dither and as pure silence without it.
+- Rate conversion from 48 kHz to all five other rates: exact length, 1000 Hz stays 1000 Hz within 2 Hz, and the level within 0.005.
+- 64 regions placed in shuffled order export as `Tape-01.wav` to `Tape-64.wav` in timeline order, each holding its own region's audio.
+
+Speed (release build, 10 minutes of 48 kHz stereo, opt-in `TAPE_PERF=1`):
+
+| Export | Time | Speed |
+| --- | --- | --- |
+| WAV 24 bit 48 kHz | 0.60 s | 1000x real time |
+| WAV 16 bit 44.1 kHz, dithered | 6.5 s | 92x |
+| FLAC 24 bit 96 kHz | 16.8 s | 36x |
+| AAC 256 kbit per second | 4.5 s | 133x |
+
+Rate conversion at the converter's highest quality is the slow part.
+
+### Tests
+
+12 new tests, all green (83 in total, 5 opt-in skipped). They cover:
+
+- Export equals playback.
+- Lossless roundtrips in every container.
+- AAC length.
+- Dither.
+- Every rate.
+- Mono, stereo and split layouts.
+- Range and selection scopes.
+- 64 region naming and order.
+- Pattern tokens and duplicate names.
+- Cancel leaving no files.
+- Every preset writing its format, and the preset limits.
+- The mono float tail read.
+
+### Tested by hand
+
+The screen was still locked, so I used the harness: `scripts/selftest/m5-export.txt` (the M3 tone, bladed into three regions with default fades). The export sheet was opened with Cmd E, Cmd Shift E and the right click menu, and Return pressed Export. Results:
+
+- Whole document as float WAV: 288,000 frames, equal to the render (maximum difference 0).
+- A Shift marked range of 30,000 frames as 24 bit WAV at 44.1 kHz: 27,563 frames, which is exact.
+- Each region as 16 bit FLAC: `Untitled-01.flac` to `Untitled-03.flac`.
+- Digitakt preset: the fields locked, and the file is 16 bit, 48 kHz, mono.
+- Morphagene preset with Each Region: the pattern locked to `mg{index}`, and the files are `mg1.wav` to `mg3.wav`, float, 48 kHz, stereo.
+- Right click on the middle region, then Export Region as CAF: named after the region, and equal to that region rendered alone.
+- Split at 96 kHz 24 bit AIFF: `Untitled-L.aif` and `Untitled-R.aif`, 576,000 frames each.
+- ALAC 24 bit and AAC: correct codec, rate and length.
+- Escape closed the sheet without exporting.
+
+The whole script runs in about 20 s. All four self-test scripts (M2 record, M3 edit, M4 process, M5 export) were run again at the end. All passed, and M2 recorded from the Studio Display microphone.
+
+Not tested: how the sheet and the preset popover look (the screen was locked, and an offscreen capture of SwiftUI sheets came out blank), and the save and folder panels themselves (the harness passes the destination directly). Maik tests the hardware: whether the Digitakt, SP-404, Morphagene and Octatrack accept the files.
+
+### Open
+
+- Chain building is not part of this: Morphagene splice markers (WAV CUE chunk) and the Octatrack `.ot` slice file. A Morphagene reel from Tape is one splice; an Octatrack chain is a plain WAV that the Octatrack can slice itself. PolyTracker has both writers, so they are listed in `docs/v2.md`.
+- PolyTracker's user-defined (custom) presets are not copied, since the spec does not ask for them.
+
+### Deviations, with reasons
+
+1. PolyTracker has no separate preset package, as noted in M1. `ExportPreset.swift` is copied into a `HardwarePresets` library target inside the TapeCore package, unchanged apart from `public`/`Sendable`, the left out custom store, and the added `limits` and `reason`. The limits come from PolyTracker's `ChainBuilder`, because `ExportPreset` itself has none.
+2. A Stereo channel layout exists next to the spec's three (as session, mono, split), because the SP-404 and Morphagene presets fix stereo.
+3. Mono is the average of the channels, so a full scale stereo signal cannot clip. A mono file of identical L and R equals either channel.
+4. Tape quantizes integer output itself, rounding at 24 bit and TPDF at 16 bit, instead of leaving it to the file. Without this, FLAC's encoder rounds differently from the WAV writer and the lossless roundtrip test would differ by an LSB. Dither has a checkbox (on by default); the spec only says to dither when reducing to 16 bit.
+5. The name pattern applies to Each Region. Single files are named in the save panel, with a default of the document name, the region name for Export Region, or the preset's naming rule (mg1).
+6. `{date}` uses YYMMDD, as in the doc naming rule.

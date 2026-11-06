@@ -62,6 +62,26 @@ public enum SampleFormat: String, Codable, CaseIterable, Sendable {
     }
 }
 
+extension AVAudioFile {
+    /// Reads `frameCount` frames from the current position, or up to the end of the file. A single `read` can
+    /// return fewer frames than asked (mono float32 WAV returns multiples of 1024), so this reads until done.
+    public func readFully(into buffer: AVAudioPCMBuffer, frameCount: AVAudioFrameCount) throws {
+        try read(into: buffer, frameCount: frameCount)
+        var got = buffer.frameLength
+        guard got < frameCount, framePosition < length, got > 0 else { return }
+        let rest = AVAudioPCMBuffer(pcmFormat: processingFormat, frameCapacity: frameCount - got)!
+        while got < frameCount, framePosition < length {
+            try read(into: rest, frameCount: frameCount - got)
+            if rest.frameLength == 0 { break }
+            for c in 0..<Int(processingFormat.channelCount) {
+                (buffer.floatChannelData![c] + Int(got)).update(from: rest.floatChannelData![c], count: Int(rest.frameLength))
+            }
+            got += rest.frameLength
+        }
+        buffer.frameLength = got
+    }
+}
+
 extension AVAudioFormat {
     /// Deinterleaved float32 for any channel count; above two channels the layout is discrete in order.
     public static func deinterleavedFloat(sampleRate: Double, channels: Int) -> AVAudioFormat {

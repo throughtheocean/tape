@@ -28,6 +28,9 @@ targets:
       - path: App
     dependencies:
       - package: TapeCore
+        product: TapeCore
+      - package: TapeCore
+        product: HardwarePresets
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.maikbluhm.tape

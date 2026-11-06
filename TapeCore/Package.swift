@@ -8,10 +8,12 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .library(name: "TapeCore", targets: ["TapeCore"]),
+        .library(name: "HardwarePresets", targets: ["HardwarePresets"]),
     ],
     targets: [
         .target(name: "TapeAtomics"),
-        .target(name: "TapeCore", dependencies: ["TapeAtomics"], swiftSettings: strict),
-        .testTarget(name: "TapeCoreTests", dependencies: ["TapeCore"], swiftSettings: strict),
+        .target(name: "HardwarePresets", swiftSettings: strict),
+        .target(name: "TapeCore", dependencies: ["TapeAtomics", "HardwarePresets"], swiftSettings: strict),
+        .testTarget(name: "TapeCoreTests", dependencies: ["TapeCore", "HardwarePresets"], swiftSettings: strict),
     ]
 )

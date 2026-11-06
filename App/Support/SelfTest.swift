@@ -1,4 +1,6 @@
+import AVFoundation
 import AppKit
+import HardwarePresets
 import TapeCore
 
 /// Scripted UI run, started with `-TapeSelfTest <script>`. Drives the front window through its
@@ -112,6 +114,33 @@ final class SelfTest {
             write("apply finished, sheet open \(c.window?.attachedSheet != nil) status '\(c.processSession?.status ?? "")'")
         case "measure":
             measure(c, label: args.joined(separator: " "))
+        case "exportto":
+            // A path with an extension is a file (its folder is created), otherwise a folder.
+            let url = args.first.map { URL(fileURLWithPath: $0) }
+            c.exportDestination = url
+            if let url {
+                let dir = url.pathExtension.isEmpty ? url : url.deletingLastPathComponent()
+                try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            }
+            write("export destination \(args.first ?? "panel")")
+        case "export":
+            exportSetting(args, session: c.exportSession)
+        case "waitExport":
+            for _ in 0..<1200 {
+                if c.exportSession == nil || c.exportSession?.isExporting == false { break }
+                try await Task.sleep(nanoseconds: 50_000_000)
+            }
+            write("export finished, sheet open \(c.window?.attachedSheet != nil) status '\(c.exportSession?.status ?? c.lastExportStatus)'")
+        case "context":
+            context(args, controller: c)
+        case "fileinfo":
+            for path in args { fileInfo(path) }
+        case "files":
+            let dir = args.first ?? "/tmp"
+            let names = ((try? FileManager.default.contentsOfDirectory(atPath: dir)) ?? []).filter { !$0.hasPrefix(".") }.sorted()
+            write("files in \(dir): \(names.count): \(names.joined(separator: ", "))")
+        case "compare":
+            compare(args, controller: c)
         case "quit":
             flushLog()
             NSApp.terminate(nil)
@@ -270,6 +299,98 @@ final class SelfTest {
             return
         }
         write("param \(args[0]) = \(args[1])")
+    }
+
+    /// `export preset <id|none>`, `export scope <kind>`, `export format <container> <int16|int24|float32> <rate> <layout>`,
+    /// `export pattern <text>`, `export dither on|off`, `export state`.
+    private func exportSetting(_ args: [String], session: ExportSession?) {
+        guard let session, let what = args.first else {
+            write("export needs an open export sheet")
+            return
+        }
+        switch what {
+        case "preset":
+            session.applyPreset(args.count > 1 ? ExportPreset.preset(for: args[1]) : nil)
+        case "scope":
+            if let kind = ExportScopeKind(rawValue: args.count > 1 ? args[1] : ""), session.availableScopes.contains(kind) {
+                session.scope = kind
+            } else {
+                write("scope not available: \(args.dropFirst().joined()) (have \(session.availableScopes.map(\.rawValue)))")
+            }
+        case "format" where args.count == 5:
+            session.settings = ExportSettings(container: AudioContainer(rawValue: args[1]) ?? .wav,
+                                              sampleFormat: SampleFormat(rawValue: args[2]) ?? .int24,
+                                              sampleRate: Double(args[3]) ?? 48000, layout: ChannelLayout(rawValue: args[4]) ?? .session)
+        case "pattern":
+            session.pattern = args.dropFirst().joined(separator: " ")
+        case "dither":
+            session.settings.dither = args.count > 1 && args[1] == "on"
+        case "state":
+            break
+        default:
+            write("unknown export setting \(what)")
+            return
+        }
+        let s = session.settings
+        write("export: preset \(session.preset?.id ?? "none") locked \(session.isLocked) scope \(session.scope.rawValue) "
+              + "\(s.container.rawValue) \(s.sampleFormat.rawValue) \(Int(s.sampleRate)) \(s.layout.rawValue) dither \(s.dither) "
+              + "pattern '\(session.pattern)' summary '\(session.summary)' problem '\(session.problem ?? "")'")
+    }
+
+    /// `context <x> <y> [item title]`: opens the timeline context menu there and performs the item.
+    private func context(_ args: [String], controller c: MainWindowController) {
+        guard args.count >= 2, let window = c.window else { return }
+        let view = c.timeline.metalView
+        let p = NSPoint(x: x(args[0], c.editor), y: y(args[1], view))
+        guard let e = NSEvent.mouseEvent(with: .rightMouseDown, location: view.convert(p, to: nil), modifierFlags: [],
+                                         timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                         context: nil, eventNumber: 0, clickCount: 1, pressure: 1),
+              let menu = view.menu(for: e) else {
+            write("no context menu")
+            return
+        }
+        write("context menu: \(menu.items.map(\.title))")
+        let title = args.dropFirst(2).joined(separator: " ")
+        if !title.isEmpty, let item = menu.items.first(where: { $0.title == title }) { perform(item, controller: c) }
+    }
+
+    private func fileInfo(_ path: String) {
+        guard let file = try? AVAudioFile(forReading: URL(fileURLWithPath: path)) else {
+            write("fileinfo \(path): cannot open")
+            return
+        }
+        let d = file.fileFormat.streamDescription.pointee
+        let codec = d.mFormatID == kAudioFormatLinearPCM ? ((d.mFormatFlags & kAudioFormatFlagIsFloat) != 0 ? "float" : "int")
+            : d.mFormatID == kAudioFormatFLAC ? "flac" : d.mFormatID == kAudioFormatAppleLossless ? "alac"
+            : d.mFormatID == kAudioFormatMPEG4AAC ? "aac" : "other"
+        let alacBits: [UInt32: UInt32] = [1: 16, 2: 20, 3: 24, 4: 32]
+        let bits = d.mBitsPerChannel > 0 ? d.mBitsPerChannel : d.mFormatID == kAudioFormatAppleLossless ? alacBits[d.mFormatFlags] ?? 0 : 0
+        write("fileinfo \((path as NSString).lastPathComponent): \(codec) \(bits) bit \(Int(d.mSampleRate)) Hz \(d.mChannelsPerFrame) ch \(file.length) frames")
+    }
+
+    /// `compare <file> [region]`: the file against the edit list render (whole document, or the selected region alone).
+    private func compare(_ args: [String], controller c: MainWindowController) {
+        guard let path = args.first, let file = try? AVAudioFile(forReading: URL(fileURLWithPath: path)) else {
+            write("compare: cannot open \(args.first ?? "")")
+            return
+        }
+        var list = c.tapeDocument.editList()
+        var span = SampleRange(start: 0, end: list.length)
+        if args.count > 1, args[1] == "region", let r = c.editor.selectedRegions.first {
+            list = EditList(regions: [r], sources: list.sources, channelCount: list.channelCount)
+            span = r.timelineRange
+        }
+        let n = Int(span.length)
+        let out = SampleBuffer(channelCount: list.channelCount, capacity: max(n, 1))
+        EditListRenderer().render(list, start: span.start, frames: n, into: out)
+        let expected = out.toArrays(count: n)
+        let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(max(file.length, 1)))!
+        try? file.readFully(into: buffer, frameCount: AVAudioFrameCount(file.length))
+        var maxDiff: Float = 0
+        for ch in 0..<min(Int(buffer.format.channelCount), expected.count) {
+            for i in 0..<min(Int(buffer.frameLength), n) { maxDiff = max(maxDiff, abs(buffer.floatChannelData![ch][i] - expected[ch][i])) }
+        }
+        write("compare \((path as NSString).lastPathComponent): \(buffer.frameLength) frames vs \(n) rendered, max difference \(maxDiff)")
     }
 
     /// Renders the range, else the selected regions' span, else the whole document, and logs loudness and peaks.

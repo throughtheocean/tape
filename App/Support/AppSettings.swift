@@ -90,6 +90,27 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(nudgeMs, forKey: "nudgeMs") }
     }
 
+    // MARK: Export settings
+
+    var exportSettings: ExportSettings {
+        get {
+            defaults.data(forKey: "exportSettings").flatMap { try? JSONDecoder().decode(ExportSettings.self, from: $0) }
+                ?? ExportSettings()
+        }
+        set { defaults.set(try? JSONEncoder().encode(newValue), forKey: "exportSettings") }
+    }
+
+    var exportPattern: String {
+        get { defaults.string(forKey: "exportPattern") ?? Exporter.defaultPattern }
+        set { defaults.set(newValue, forKey: "exportPattern") }
+    }
+
+    /// Id of the last chosen hardware preset; nil for none.
+    var exportPresetID: String? {
+        get { defaults.string(forKey: "exportPresetID") }
+        set { defaults.set(newValue, forKey: "exportPresetID") }
+    }
+
     var inspectorWidth: Double {
         get { (defaults.object(forKey: "inspectorWidth") as? Double) ?? 280 }
         set { defaults.set(newValue, forKey: "inspectorWidth") }
