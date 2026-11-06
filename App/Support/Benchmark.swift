@@ -5,6 +5,8 @@ import TapeCore
 /// Acceptance measurements, started with `-TapeBenchmark <audio file>` on the command line.
 /// Imports the file into a scratch document on the fastest display, scripts scroll and zoom,
 /// measures frame pacing and play start latency, writes `/tmp/tape-benchmark.txt` and quits.
+/// With `-TapeBenchmarkTracks <n>` the document gets n tracks with a 2 hour region each, the sweep runs in the
+/// multitrack view, then the view toggles every frame, then a region moves across lanes on every frame while playing.
 @MainActor
 final class Benchmark {
     private let audioPath: String
@@ -19,7 +21,11 @@ final class Benchmark {
     private var importStart: CFTimeInterval = 0
     private var fitSpp: Double = 1
     private static let animationSeconds = 10.0
+    private static let phaseSeconds = 4.0
     private let savedOpenDocuments = AppSettings.shared.openDocuments
+    private let trackCount = UserDefaults.standard.integer(forKey: "TapeBenchmarkTracks")
+    private enum Phase { case sweep, toggle, dragWhilePlaying }
+    private var phase = Phase.sweep
 
     init(audioPath: String, app: AppDelegate) {
         self.audioPath = audioPath
@@ -67,7 +73,28 @@ final class Benchmark {
             return
         }
         log("app active during run: \(NSApp.isActive ? "yes" : "no"), window key: \(controller?.window?.isKeyWindow == true ? "yes" : "no")")
+        if trackCount > 1 { buildTracks() }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { self.startAnimation() }
+    }
+
+    /// One 2 hour region per track, each from a different part of the source.
+    private func buildTracks() {
+        guard let controller, let source = controller.tapeDocument.project.sources.first else { return }
+        let rate = source.sampleRate
+        let length = Int64(2 * 3600 * rate)
+        let step = max(0, (source.frameCount - length) / Int64(trackCount))
+        controller.tapeDocument.apply("Benchmark Tracks") { p in
+            p.regions = []
+            while p.tracks.count < self.trackCount { _ = EditOperations.addTrack(&p, at: p.tracks.count) }
+            for (i, t) in p.tracks.enumerated() {
+                let start = Int64(i) * step
+                p.regions.append(Region(name: "Take \(i + 1)", trackId: t.id, sourceId: source.id, sourceIn: start,
+                                        sourceOut: min(source.frameCount, start + length), position: 0))
+            }
+        }
+        controller.editor.multitrack = true
+        log(String(format: "multitrack: %d tracks, %.2f h each, view %@", trackCount, Double(length) / rate / 3600,
+                   controller.editor.multitrack ? "multi" : "single"))
     }
 
     private func startAnimation() {
@@ -81,7 +108,69 @@ final class Benchmark {
         link.add(to: .main, forMode: .common)
         self.link = link
         phaseStart = CACurrentMediaTime()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            guard self.ticks == 0, let link = self.link else { return }
+            link.invalidate()
+            self.link = nil
+            self.log("display link not running (screen locked?): frame pacing skipped")
+            self.runWithoutDisplay()
+        }
     }
+
+    /// Main thread cost of a view toggle, and the drag while playing on a 120 Hz timer.
+    private func runWithoutDisplay() {
+        guard trackCount > 1, let controller else { return finish() }
+        let editor = controller.editor
+        var toggles: [Double] = []
+        for _ in 0..<240 {
+            let t0 = CACurrentMediaTime()
+            editor.multitrack.toggle()
+            controller.timeline.needsLayout = true
+            controller.timeline.layoutSubtreeIfNeeded()
+            if editor.multitrack { controller.timeline.headers.refresh() }
+            controller.timeline.labels.update()
+            toggles.append((CACurrentMediaTime() - t0) * 1000)
+        }
+        toggles.sort()
+        log(String(format: "toggle Single and Multi, main thread layout, headers and labels ms (no GPU), n=%d: p50 %.3f, p99 %.3f, max %.3f",
+                   toggles.count, toggles[toggles.count / 2], toggles[toggles.count * 99 / 100], toggles.last!))
+        editor.multitrack = true
+        editor.setView(start: 0, samplesPerPoint: 200)
+        editor.playback.outputVolume = 0
+        editor.locate(0)
+        underrunsAtStart = editor.playback.underruns.load()
+        editor.togglePlay()
+        editor.document.beginGesture()
+        phaseStart = CACurrentMediaTime()
+        var steps: [Double] = []
+        let timer = Timer(timeInterval: 1.0 / 120, repeats: true) { _ in
+            MainActor.assumeIsolated {
+                let t = CACurrentMediaTime() - self.phaseStart
+                guard t <= Self.phaseSeconds else {
+                    self.timer?.invalidate()
+                    self.timer = nil
+                    editor.document.endGesture("Move")
+                    let underruns = editor.playback.underruns.load() - self.underrunsAtStart
+                    let played = editor.playback.position
+                    editor.stop()
+                    steps.sort()
+                    self.log(String(format: "drag across lanes while playing on a 120 Hz timer: %d steps, %d lane changes, step ms p50 %.3f, p99 %.3f, max %.3f",
+                                    steps.count, self.laneChanges, steps[steps.count / 2], steps[steps.count * 99 / 100], steps.last!))
+                    self.log("playhead advanced to \(played) frames, playback underruns while dragging: \(underruns)")
+                    self.finish()
+                    return
+                }
+                let t0 = CACurrentMediaTime()
+                self.dragStep(editor, t: t)
+                controller.timeline.headers.refresh()
+                steps.append((CACurrentMediaTime() - t0) * 1000)
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        self.timer = timer
+    }
+
+    private var timer: Timer?
 
     /// First half: continuous zoom sweep from fit all to 1/16 sample per point and back while
     /// panning, covering every pyramid level and the per sample view. Second half: fast pan.
@@ -94,7 +183,18 @@ final class Benchmark {
         tickIntervals.append((link.targetTimestamp - link.timestamp) * 1000)
         let t = CACurrentMediaTime() - phaseStart
         let length = Double(editor.documentLength)
+        if phase == .toggle {
+            if t > Self.phaseSeconds { return nextPhase(link) }
+            editor.multitrack.toggle()
+            return
+        }
+        if phase == .dragWhilePlaying {
+            if t > Self.phaseSeconds { return nextPhase(link) }
+            dragStep(editor, t: t)
+            return
+        }
         if t > Self.animationSeconds {
+            if trackCount > 1 { return nextPhase(link) }
             link.invalidate()
             self.link = nil
             controller?.timeline.renderer?.timingSink = nil
@@ -114,6 +214,67 @@ final class Benchmark {
             let start = (length - visible) * (t - half) / half
             editor.setView(start: start, samplesPerPoint: spp)
         }
+    }
+
+    private func nextPhase(_ link: CADisplayLink) {
+        guard let editor = controller?.editor else { return }
+        switch phase {
+        case .sweep:
+            log("phase: zoom and pan sweep, multitrack view")
+            reportFrames()
+            phase = .toggle
+            editor.fitAll()
+        case .toggle:
+            log("phase: Single and Multi toggled on every display frame")
+            reportFrames()
+            editor.multitrack = true
+            phase = .dragWhilePlaying
+            editor.setView(start: 0, samplesPerPoint: 200)
+            editor.playback.outputVolume = 0
+            editor.locate(0)
+            underrunsAtStart = editor.playback.underruns.load()
+            editor.togglePlay()
+            editor.document.beginGesture()
+        case .dragWhilePlaying:
+            editor.document.endGesture("Move")
+            let underruns = editor.playback.underruns.load() - underrunsAtStart
+            editor.stop()
+            log("phase: region 1 moved across all lanes on every display frame while playing")
+            reportFrames()
+            log("lane changes: \(laneChanges), playback underruns while dragging: \(underruns)")
+            link.invalidate()
+            self.link = nil
+            controller?.timeline.renderer?.timingSink = nil
+            measureLatency(remaining: 10)
+            return
+        }
+        presented = []
+        cpu = []
+        gpu = []
+        ticks = 0
+        tickIntervals = []
+        controller?.timeline.tickDurations = []
+        phaseStart = CACurrentMediaTime()
+    }
+
+    private var underrunsAtStart: Int64 = 0
+    private var laneChanges = 0
+    private var lastLane = 0
+
+    /// Moves the first region down and up through every lane, and a little in time, as a drag would.
+    private func dragStep(_ editor: EditorController, t: Double) {
+        guard let base = editor.document.gestureBase,
+              let id = base.regions.first(where: { $0.trackId == base.tracks[0].id })?.id else { return }
+        let n = trackCount
+        let cycle = Int(t * 6) % (2 * n - 2)
+        let lane = cycle < n ? cycle : 2 * n - 2 - cycle
+        let delta = Int64(sin(t * 3) * 48000)
+        editor.document.updateGesture {
+            _ = EditOperations.move(&$0, ids: [id], by: delta)
+            _ = EditOperations.moveToTrack(&$0, ids: [id], byLanes: lane)
+        }
+        if lane != lastLane { laneChanges += 1 }
+        lastLane = lane
     }
 
     private func record(_ t: FrameTiming) {

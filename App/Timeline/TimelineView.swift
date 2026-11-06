@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import MetalKit
 import QuartzCore
 import TapeCore
@@ -16,6 +17,9 @@ final class TimelineView: NSView {
     let sideBar = TimelineSideBar(frame: .zero)
     var amplitudeBar: ZoomBarView { sideBar.amplitudeBar }
     private let corner = NSView()
+    let headers: TrackHeaderColumn
+    private let headerCorner = NSView()
+    private var observers: Set<AnyCancellable> = []
     private(set) var renderer: TimelineRenderer?
     private var displayLink: CADisplayLink?
     private var dirty = true
@@ -25,6 +29,7 @@ final class TimelineView: NSView {
         ruler = RulerView(editor: editor)
         metalView = TimelineMetalView(editor: editor)
         labels = LabelsOverlayView(editor: editor)
+        headers = TrackHeaderColumn(editor: editor)
         super.init(frame: .zero)
         wantsLayer = true
         layer?.backgroundColor = Theme.timeline.cgColor
@@ -41,6 +46,11 @@ final class TimelineView: NSView {
         corner.wantsLayer = true
         corner.layer?.backgroundColor = Theme.chrome.cgColor
         addSubview(corner)
+        headerCorner.wantsLayer = true
+        headerCorner.layer?.backgroundColor = Theme.chrome.cgColor
+        addSubview(headerCorner)
+        addSubview(headers)
+        editor.$multitrack.sink { [weak self] _ in self?.needsLayout = true }.store(in: &observers)
 
         let zoomBar = toolStrip.zoomBar
         zoomBar.value = { [unowned editor] in editor.zoom.normalized }
@@ -59,6 +69,12 @@ final class TimelineView: NSView {
         sideBar.select.toggle = { [unowned editor] in editor.tool = .select }
         sideBar.blade.isOn = { [unowned editor] in editor.tool == .blade }
         sideBar.blade.toggle = { [unowned editor] in editor.tool = editor.tool == .blade ? .select : .blade }
+        sideBar.laneSize.label = { [unowned editor] in
+            switch editor.laneHeight { case ..<60: return "S"; case ..<120: return "M"; default: return "L" }
+        }
+        sideBar.laneSize.action = { [unowned editor] in editor.cycleLaneHeight() }
+        sideBar.expand.isOn = { [unowned editor] in editor.expandSelected }
+        sideBar.expand.toggle = { [unowned editor] in editor.expandSelected.toggle() }
 
         editor.needsDisplay = { [weak self] in self?.setDirty() }
     }
@@ -72,16 +88,26 @@ final class TimelineView: NSView {
         super.layout()
         let b = bounds
         let w = max(0, b.width - TimelineSideBar.width)
-        ruler.frame = NSRect(x: 0, y: 0, width: w, height: Self.rulerHeight)
-        let track = NSRect(x: 0, y: Self.rulerHeight, width: w, height: max(0, b.height - Self.rulerHeight))
+        // The multitrack view puts the header column left of everything that scrolls in time.
+        let multi = editor.multitrack
+        let x0 = multi ? min(EditorController.headerWidth, w) : 0
+        ruler.frame = NSRect(x: x0, y: 0, width: w - x0, height: Self.rulerHeight)
+        let track = NSRect(x: x0, y: Self.rulerHeight, width: w - x0, height: max(0, b.height - Self.rulerHeight))
         metalView.frame = track
         labels.frame = track
-        toolStrip.frame = NSRect(x: 0, y: track.minY + TimelineLayout.minimapHeight + 1,
-                                 width: w, height: TimelineLayout.toolStripHeight - 1)
+        toolStrip.frame = NSRect(x: x0, y: track.minY + TimelineLayout.minimapHeight + 1,
+                                 width: w - x0, height: TimelineLayout.toolStripHeight - 1)
         let barTop = track.minY + TimelineLayout.trackTop
         corner.frame = NSRect(x: w, y: 0, width: TimelineSideBar.width, height: barTop)
         sideBar.frame = NSRect(x: w, y: barTop, width: TimelineSideBar.width, height: max(0, b.height - barTop))
-        editor.timelineWidth = Double(w)
+        sideBar.showsLaneTools = multi
+        headers.isHidden = !multi
+        headerCorner.isHidden = !multi
+        headerCorner.frame = NSRect(x: 0, y: 0, width: x0, height: barTop)
+        headers.frame = NSRect(x: 0, y: barTop, width: x0, height: max(0, b.height - barTop))
+        editor.timelineWidth = Double(w - x0)
+        editor.timelineHeight = Double(track.height)
+        if multi { headers.refresh() }
         setDirty()
     }
 
@@ -109,6 +135,10 @@ final class TimelineView: NSView {
     @objc private func tick(_ link: CADisplayLink) {
         let t0 = CACurrentMediaTime()
         editor.tick()
+        if editor.multitrack {
+            editor.updateMeters(now: t0)
+            headers.refresh()
+        }
         guard dirty else { return }
         dirty = false
         metalView.draw()
@@ -129,15 +159,15 @@ final class TimelineMetalView: MTKView {
         case minimapScroll(grabOffset: Double)
         case minimapEdge(left: Bool, fixedFrame: Double)
         /// Mouse down on a region; becomes a move once the pointer travels.
-        case pressRegion(id: UUID, downX: Double, downFrame: Int64)
-        case move(ids: Set<UUID>, downFrame: Int64)
+        case pressRegion(id: UUID, downX: Double, downY: Double, downFrame: Int64)
+        case move(ids: Set<UUID>, downFrame: Int64, downLane: Int)
         case trim(id: UUID, start: Bool)
         case fade(id: UUID, end: EditOperations.FadeEnd, ids: Set<UUID>)
         case fadeShape(id: UUID, end: EditOperations.FadeEnd, ids: Set<UUID>, startValue: Double, downY: Double)
         case mark(anchor: Int64)
         /// Mouse down on empty track; a click locates, a drag draws a rubber band.
-        case pressEmpty(downX: Double, additive: Bool)
-        case rubber(anchor: Double, base: Set<UUID>)
+        case pressEmpty(downX: Double, downY: Double, additive: Bool)
+        case rubber(anchor: Double, anchorY: Double, base: Set<UUID>)
     }
 
     var drag = Drag.none
@@ -179,6 +209,9 @@ final class TimelineMetalView: MTKView {
             editor.zoomAmplitude(by: exp(Double(dy) * (precise ? 0.01 : 0.12)))
         } else if flags.contains(.command) || flags.contains(.option) {
             editor.zoom(by: exp(-Double(dy) * (precise ? 0.01 : 0.12)), anchorX: Double(point.x))
+        } else if editor.multitrack, editor.maxLaneScroll > 0, abs(event.scrollingDeltaY) > abs(event.scrollingDeltaX) {
+            // Lanes taller than the window scroll vertically; Shift scroll (horizontal deltas) still pans.
+            editor.scrollLanes(by: -Double(event.scrollingDeltaY) * (precise ? 1 : 12))
         } else {
             var dx = event.scrollingDeltaX
             if abs(event.scrollingDeltaY) > abs(dx) { dx = event.scrollingDeltaY }
@@ -345,8 +378,13 @@ final class LabelsOverlayView: NSView {
         let scale = window?.backingScaleFactor ?? 2
         let width = Double(bounds.width)
         var used = 0
+        let viewport = editor.laneViewport
+        let lanes = Dictionary(editor.lanes().map { ($0.track.id, $0) }, uniquingKeysWith: { a, _ in a })
         if editor.samplesPerPoint > 0 {
             for region in doc.project.regions {
+                guard let lane = lanes[region.trackId] else { continue }
+                let y = lane.bodyTop + (lane.strip >= Double(TimelineLayout.nameStrip) ? 2 : 0)
+                if y < viewport.top - 1 || y + 12 > viewport.bottom { continue }
                 let x0 = editor.x(forFrame: Double(region.position))
                 let x1 = editor.x(forFrame: Double(region.end))
                 if x1 < 0 || x0 > width || x1 - x0 < 24 { continue }
@@ -357,7 +395,7 @@ final class LabelsOverlayView: NSView {
                 used += 1
                 if (layer.string as? String) != text { layer.string = text }
                 let left = max(x0, 0) + 6
-                layer.frame = CGRect(x: left, y: TimelineLayout.trackTop + 2, width: max(0, min(x1, width) - left - 4), height: 14)
+                layer.frame = CGRect(x: left, y: y, width: max(0, min(x1, width) - left - 4), height: 14)
             }
         }
         for i in used..<pool.count where !pool[i].isHidden { pool[i].isHidden = true }
@@ -387,7 +425,8 @@ final class LabelsOverlayView: NSView {
         let width = CGFloat(text.count) * 6.6 + 12
         var x = CGFloat(editor.pointer.hintX) + 12
         if x + width > bounds.width - 4 { x = CGFloat(editor.pointer.hintX) - width - 12 }
-        hintLayer.frame = CGRect(x: max(4, x), y: TimelineLayout.waveTop(bounds.height) + 6, width: width, height: 16)
+        let y = editor.pointer.hintY.map { $0 - 26 } ?? Double(TimelineLayout.trackTop + TimelineLayout.nameStrip + 6)
+        hintLayer.frame = CGRect(x: max(4, x), y: max(TimelineLayout.trackTop, y), width: width, height: 16)
     }
 
     private func textLayer(at index: Int, scale: CGFloat) -> CATextLayer {

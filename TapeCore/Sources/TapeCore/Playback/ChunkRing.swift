@@ -18,6 +18,8 @@ final class ChunkRing: @unchecked Sendable {
     let channelCount: Int
     let headers: UnsafeMutablePointer<Header>
     let data: UnsafeMutablePointer<Float>
+    /// Per slot: `MeterQueue.stride` peaks (tracks, then master channels) of the audio in that slot.
+    let meters: UnsafeMutablePointer<Float>
     /// Monotonic counters; slot = index % slotCount.
     let writeIndex = AtomicInt64(0)
     let readIndex = AtomicInt64(0)
@@ -30,11 +32,14 @@ final class ChunkRing: @unchecked Sendable {
         headers.initialize(repeating: Header(), count: slotCount)
         data = .allocate(capacity: slotCount * channelCount * chunkFrames)
         data.initialize(repeating: 0, count: slotCount * channelCount * chunkFrames)
+        meters = .allocate(capacity: slotCount * MeterQueue.stride)
+        meters.initialize(repeating: 0, count: slotCount * MeterQueue.stride)
     }
 
     deinit {
         headers.deallocate()
         data.deallocate()
+        meters.deallocate()
     }
 
     var filled: Int { Int(writeIndex.load() - readIndex.load()) }

@@ -240,7 +240,7 @@ final class ProcessSession: ObservableObject {
                 replaced[r.id] = copy
             }
             let regions = project.regions.compactMap { replaced[$0.id] ?? (list.sources[$0.sourceId] != nil ? $0 : nil) }
-            let preview = EditList(regions: regions, sources: sources, channelCount: list.channelCount)
+            let preview = list.with(regions: regions, sources: sources)
             await MainActor.run {
                 guard self.previewing, !Task.isCancelled else { return }
                 self.editor.playback.setEditList(preview)

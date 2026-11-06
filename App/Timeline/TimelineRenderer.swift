@@ -67,6 +67,7 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
         var spp: Double
         var amplitude: Double
         var size: CGSize
+        var layout = 0
     }
 
     private enum Kind { case rects, lines }
@@ -171,10 +172,15 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
 
         rects.removeAll(keepingCapacity: true)
         lines.removeAll(keepingCapacity: true)
-        buildBackground(editor, size: size, scale: scale)
+        let lanes = editor.lanes()
+        buildBackground(editor, lanes: lanes, size: size, scale: scale)
+        let backgroundEnd = rects.count
+        buildLanes(editor, lanes: lanes, size: size, scale: scale)
         let regionBodyEnd = rects.count
-        rebuildWaveformsIfNeeded(editor, size: size, scale: scale)
+        rebuildWaveformsIfNeeded(editor, lanes: lanes, size: size, scale: scale)
         rebuildMinimapIfNeeded(editor, size: size, scale: scale)
+        let laneOverlayStart = rects.count
+        buildLaneOverlays(editor, lanes: lanes, size: size, scale: scale)
         let overlayStart = rects.count
         buildOverlays(editor, size: size, scale: scale)
 
@@ -198,8 +204,15 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
             enc.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4, instanceCount: count)
         }
 
-        // Background, grid, minimap background and region bodies.
-        drawRects(frameRects, start: 0, count: regionBodyEnd)
+        // Background, grid and minimap background.
+        drawRects(frameRects, start: 0, count: backgroundEnd)
+        drawRects(miniBuffer, start: 0, count: miniCount)
+        // Lanes, clipped to the lane area so scrolled lanes do not cover the minimap.
+        let viewport = editor.laneViewport
+        let clipTop = max(0, Int((viewport.top * Double(scale)).rounded()))
+        let clipBottom = min(Int(size.height), Int((viewport.bottom * Double(scale)).rounded()))
+        enc.setScissorRect(MTLScissorRect(x: 0, y: clipTop, width: Int(size.width), height: max(0, clipBottom - clipTop)))
+        drawRects(frameRects, start: backgroundEnd, count: regionBodyEnd - backgroundEnd)
         // One draw call per region waveform.
         for d in waveDraws {
             switch d.kind {
@@ -207,10 +220,11 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
             case .lines: drawLines(waveLines, start: d.start, count: d.count)
             }
         }
-        drawRects(miniBuffer, start: 0, count: miniCount)
+        drawRects(frameRects, start: laneOverlayStart, count: overlayStart - laneOverlayStart)
+        drawLines(frameLines, start: 0, count: lines.count)
+        enc.setScissorRect(MTLScissorRect(x: 0, y: 0, width: Int(size.width), height: Int(size.height)))
         // Range, loop, minimap window, playhead.
         drawRects(frameRects, start: overlayStart, count: rects.count - overlayStart)
-        drawLines(frameLines, start: 0, count: lines.count)
         enc.endEncoding()
 
         guard let drawable else {
@@ -239,9 +253,8 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
         Float(editor.x(forFrame: frame) * scale)
     }
 
-    private func buildBackground(_ editor: EditorController, size: CGSize, scale: CGFloat) {
+    private func buildBackground(_ editor: EditorController, lanes: [Lane], size: CGSize, scale: CGFloat) {
         let w = Float(size.width), h = Float(size.height), s = Float(scale)
-        let accent = Theme.accent
         rects.append(RectInstance(rect: [0, 0, w, h], color: Theme.timeline.rgba))
         rects.append(RectInstance(rect: [0, 0, w, Float(TimelineLayout.minimapHeight) * s], color: Theme.chrome.rgba))
         rects.append(RectInstance(rect: [0, Float(TimelineLayout.minimapHeight) * s, w, s], color: Theme.separator.rgba))
@@ -263,88 +276,122 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
             }
         }
 
-        // Region bodies, name strip and placeholders.
+    }
+
+    /// Lane backgrounds (multitrack), region bodies, name strips and placeholders.
+    private func buildLanes(_ editor: EditorController, lanes: [Lane], size: CGSize, scale: CGFloat) {
+        let w = Float(size.width), s = Float(scale)
         let doc = editor.document
-        let top = Float(TimelineLayout.regionTop(size.height / scale)) * s
-        let bottom = Float(TimelineLayout.regionBottom(size.height / scale)) * s
-        let strip = Float(TimelineLayout.nameStrip) * s
         let selection = editor.selection
-        for region in doc.project.regions {
-            let x0 = px(editor, frame: Double(region.position), scale: scale)
-            let x1 = px(editor, frame: Double(region.end), scale: scale)
-            if x1 < 0 || x0 > w { continue }
-            let a = max(x0, -2), b = min(x1, w + 2)
-            let width = max(b - a, 1)
-            let selected = selection.contains(region.id)
-            let body = accent.withAlphaComponent(selected ? 0.28 : 0.16).rgba
-            let stripColor = selected ? accent.blended(withFraction: 0.25, of: .white)!.withAlphaComponent(0.85).rgba
-                : accent.withAlphaComponent(0.42).rgba
-            let edge = selected ? SIMD4<Float>(1, 1, 1, 0.9) : accent.withAlphaComponent(0.75).rgba
-            rects.append(RectInstance(rect: [a, top, width, bottom - top], color: body))
-            rects.append(RectInstance(rect: [a, top, width, strip], color: stripColor))
-            rects.append(RectInstance(rect: [a, top, width, 1], color: edge))
-            rects.append(RectInstance(rect: [a, bottom - 1, width, 1], color: edge))
-            if x0 >= -1 { rects.append(RectInstance(rect: [x0, top, 1, bottom - top], color: edge)) }
-            if x1 <= w + 1 { rects.append(RectInstance(rect: [x1 - 1, top, 1, bottom - top], color: edge)) }
-            if doc.loaded[region.sourceId] == nil {
-                let failed = doc.failures[region.sourceId] != nil
-                let mid = top + strip + (bottom - top - strip) / 2
-                let color: SIMD4<Float> = failed ? [0.9, 0.25, 0.2, 0.5] : [1, 1, 1, 0.12]
-                rects.append(RectInstance(rect: [a, mid - 3 * s, width, 6 * s], color: color))
+        let viewport = editor.laneViewport
+        if editor.multitrack {
+            for lane in lanes where lane.bottom > viewport.top && lane.top < viewport.bottom {
+                let top = Float(lane.top) * s, height = Float(lane.height) * s
+                if lane.track.id == editor.selectedTrackID {
+                    rects.append(RectInstance(rect: [0, top, w, height], color: [1, 1, 1, editor.headerFocused ? 0.05 : 0.03]))
+                } else if lane.index % 2 == 1 {
+                    rects.append(RectInstance(rect: [0, top, w, height], color: [1, 1, 1, 0.012]))
+                }
+                rects.append(RectInstance(rect: [0, top + height - s, w, s], color: Theme.separator.rgba))
+            }
+        }
+        for lane in lanes where lane.bottom > viewport.top && lane.top < viewport.bottom {
+            let accent = Theme.trackColor(lane.track.color)
+            let top = Float(lane.bodyTop) * s
+            let bottom = Float(lane.bodyBottom) * s
+            let strip = Float(lane.strip) * s
+            let body0 = accent.withAlphaComponent(0.16).rgba, body1 = accent.withAlphaComponent(0.28).rgba
+            let strip0 = accent.withAlphaComponent(0.42).rgba
+            let strip1 = accent.blended(withFraction: 0.25, of: .white)!.withAlphaComponent(0.85).rgba
+            let edge0 = accent.withAlphaComponent(0.75).rgba
+            for region in doc.project.regions where region.trackId == lane.track.id {
+                let x0 = px(editor, frame: Double(region.position), scale: scale)
+                let x1 = px(editor, frame: Double(region.end), scale: scale)
+                if x1 < 0 || x0 > w { continue }
+                let a = max(x0, -2), b = min(x1, w + 2)
+                let width = max(b - a, 1)
+                let selected = selection.contains(region.id)
+                let edge = selected ? SIMD4<Float>(1, 1, 1, 0.9) : edge0
+                rects.append(RectInstance(rect: [a, top, width, bottom - top], color: selected ? body1 : body0))
+                rects.append(RectInstance(rect: [a, top, width, strip], color: selected ? strip1 : strip0))
+                rects.append(RectInstance(rect: [a, top, width, 1], color: edge))
+                rects.append(RectInstance(rect: [a, bottom - 1, width, 1], color: edge))
+                if x0 >= -1 { rects.append(RectInstance(rect: [x0, top, 1, bottom - top], color: edge)) }
+                if x1 <= w + 1 { rects.append(RectInstance(rect: [x1 - 1, top, 1, bottom - top], color: edge)) }
+                if doc.loaded[region.sourceId] == nil {
+                    let failed = doc.failures[region.sourceId] != nil
+                    let mid = top + strip + (bottom - top - strip) / 2
+                    let color: SIMD4<Float> = failed ? [0.9, 0.25, 0.2, 0.5] : [1, 1, 1, 0.12]
+                    rects.append(RectInstance(rect: [a, mid - 3 * s, width, 6 * s], color: color))
+                }
             }
         }
     }
 
-    private func buildOverlays(_ editor: EditorController, size: CGSize, scale: CGFloat) {
-        let w = Float(size.width), h = Float(size.height), s = Float(scale)
-        let top = Float(TimelineLayout.trackTop) * s
-        let miniH = Float(TimelineLayout.minimapHeight) * s
-        let regionTop = Float(TimelineLayout.regionTop(size.height / scale)) * s
-        let regionBottom = Float(TimelineLayout.regionBottom(size.height / scale)) * s
+    /// Pre-roll heads, the recording block, fades, rubber band, blade line and trim edge, inside the lanes.
+    private func buildLaneOverlays(_ editor: EditorController, lanes: [Lane], size: CGSize, scale: CGFloat) {
+        let w = Float(size.width), s = Float(scale)
+        let project = editor.document.project
+        let byTrack = Dictionary(lanes.map { ($0.track.id, $0) }, uniquingKeysWith: { a, _ in a })
+        func span(_ trackId: UUID) -> (Float, Float)? {
+            guard let lane = byTrack[trackId] else { return nil }
+            return (Float(lane.bodyTop) * s, Float(lane.bodyBottom) * s)
+        }
 
         // Pre-roll heads of recordings, dimmed up to the moment R was pressed.
-        let project = editor.document.project
         if let rate = project.sessionRate {
             for region in project.regions {
-                guard let ref = project.source(region.sourceId) else { continue }
+                guard let (top, bottom) = span(region.trackId), let ref = project.source(region.sourceId) else { continue }
                 let head = min(ref.sessionPreRoll(sessionRate: rate) - region.sourceIn, region.length)
                 guard head > 0 else { continue }
                 let x0 = px(editor, frame: Double(region.position), scale: scale)
                 let x1 = px(editor, frame: Double(region.position + head), scale: scale)
                 if x1 < 0 || x0 > w { continue }
-                rects.append(RectInstance(rect: [x0, regionTop, max(x1 - x0, 1), regionBottom - regionTop], color: [0, 0, 0, 0.5]))
-                rects.append(RectInstance(rect: [x1 - s / 2, regionTop, s, regionBottom - regionTop], color: [1, 0.27, 0.23, 0.9]))
+                rects.append(RectInstance(rect: [x0, top, max(x1 - x0, 1), bottom - top], color: [0, 0, 0, 0.5]))
+                rects.append(RectInstance(rect: [x1 - s / 2, top, s, bottom - top], color: [1, 0.27, 0.23, 0.9]))
             }
         }
-        if let span = editor.recordingSpan {
-            let x0 = px(editor, frame: Double(span.start), scale: scale)
-            let x1 = px(editor, frame: Double(span.end), scale: scale)
+        if let rec = editor.recordingSpan, let (top, bottom) = span(editor.recordingTrack ?? editor.selectedTrackID) {
+            let x0 = px(editor, frame: Double(rec.start), scale: scale)
+            let x1 = px(editor, frame: Double(rec.end), scale: scale)
             if x1 >= 0, x0 <= w {
-                rects.append(RectInstance(rect: [x0, regionTop, max(x1 - x0, 1), regionBottom - regionTop], color: [1, 0.27, 0.23, 0.22]))
-                rects.append(RectInstance(rect: [x0, regionTop, max(x1 - x0, 1), 2 * s], color: [1, 0.27, 0.23, 1]))
+                rects.append(RectInstance(rect: [x0, top, max(x1 - x0, 1), bottom - top], color: [1, 0.27, 0.23, 0.22]))
+                rects.append(RectInstance(rect: [x0, top, max(x1 - x0, 1), 2 * s], color: [1, 0.27, 0.23, 1]))
             }
         }
 
-        buildFades(editor, size: size, scale: scale)
+        buildFades(editor, lanes: byTrack, size: size, scale: scale)
 
         if let band = editor.pointer.rubberBand {
+            let viewport = editor.laneViewport
+            let top = Float(editor.pointer.rubberTop ?? viewport.top) * s
+            let bottom = Float(editor.pointer.rubberBottom ?? viewport.bottom) * s
             let x0 = px(editor, frame: Double(band.start), scale: scale)
             let x1 = px(editor, frame: Double(band.end), scale: scale)
-            rects.append(RectInstance(rect: [x0, regionTop, max(x1 - x0, 1), regionBottom - regionTop], color: [1, 1, 1, 0.08]))
-            for r in [SIMD4<Float>(x0, regionTop, x1 - x0, s), SIMD4<Float>(x0, regionBottom - s, x1 - x0, s),
-                      SIMD4<Float>(x0, regionTop, s, regionBottom - regionTop), SIMD4<Float>(x1 - s, regionTop, s, regionBottom - regionTop)] {
+            rects.append(RectInstance(rect: [x0, top, max(x1 - x0, 1), bottom - top], color: [1, 1, 1, 0.08]))
+            for r in [SIMD4<Float>(x0, top, x1 - x0, s), SIMD4<Float>(x0, bottom - s, x1 - x0, s),
+                      SIMD4<Float>(x0, top, s, bottom - top), SIMD4<Float>(x1 - s, top, s, bottom - top)] {
                 rects.append(RectInstance(rect: r, color: [1, 1, 1, 0.6]))
             }
         }
-        if let frame = editor.pointer.bladeFrame {
+        if let frame = editor.pointer.bladeFrame, let id = editor.pointer.hoverRegion,
+           let region = project.regions.first(where: { $0.id == id }), let (top, bottom) = span(region.trackId) {
             let x = px(editor, frame: Double(frame), scale: scale).rounded()
-            rects.append(RectInstance(rect: [x - s / 2, regionTop, s, regionBottom - regionTop], color: [1, 0.85, 0.3, 0.95]))
+            rects.append(RectInstance(rect: [x - s / 2, top, s, bottom - top], color: [1, 0.85, 0.3, 0.95]))
         }
-        if let edge = editor.pointer.hoverEdge, let r = project.regions.first(where: { $0.id == edge.id }) {
+        if let edge = editor.pointer.hoverEdge, let r = project.regions.first(where: { $0.id == edge.id }),
+           let (top, bottom) = span(r.trackId) {
             let x = px(editor, frame: Double(edge.start ? r.position : r.end), scale: scale)
             let x0 = edge.start ? x : x - 3 * s
-            rects.append(RectInstance(rect: [x0, regionTop, 3 * s, regionBottom - regionTop], color: [1, 0.85, 0.3, 0.9]))
+            rects.append(RectInstance(rect: [x0, top, 3 * s, bottom - top], color: [1, 0.85, 0.3, 0.9]))
         }
+    }
+
+    /// Range, loop bar, minimap window and playhead, over everything.
+    private func buildOverlays(_ editor: EditorController, size: CGSize, scale: CGFloat) {
+        let w = Float(size.width), h = Float(size.height), s = Float(scale)
+        let top = Float(TimelineLayout.trackTop) * s
+        let miniH = Float(TimelineLayout.minimapHeight) * s
 
         if let range = editor.range {
             let x0 = px(editor, frame: Double(range.start), scale: scale)
@@ -389,17 +436,17 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
 
     /// Fade overlays: the attenuated part above the curve shaded, the curve as a line,
     /// and on the hovered region the corner and midpoint handles.
-    private func buildFades(_ editor: EditorController, size: CGSize, scale: CGFloat) {
+    private func buildFades(_ editor: EditorController, lanes: [UUID: Lane], size: CGSize, scale: CGFloat) {
         let w = Float(size.width), s = Float(scale)
-        let height = size.height / scale
-        let top = Float(TimelineLayout.waveTop(height)) * s
-        let bottom = Float(TimelineLayout.regionBottom(height)) * s
         let shade = SIMD4<Float>(0, 0, 0, 0.42)
         let curve = SIMD4<Float>(1, 1, 1, 0.85)
         let lineParams = SIMD4<Float>(0.75 * s, 0, 0, 0)
         let step: Float = 2 * s
 
         for region in editor.project.regions {
+            guard let lane = lanes[region.trackId] else { continue }
+            let top = Float(lane.waveTop) * s
+            let bottom = Float(lane.bodyBottom) * s
             let x0 = px(editor, frame: Double(region.position), scale: scale)
             let x1 = px(editor, frame: Double(region.end), scale: scale)
             if x1 < 0 || x0 > w { continue }
@@ -429,8 +476,9 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
         }
 
         // Handles on the hovered region, or on the region being dragged.
-        guard let id = editor.pointer.hoverRegion, let region = editor.project.regions.first(where: { $0.id == id }) else { return }
-        let handles = FadeHandles(region, editor: editor, height: height)
+        guard let id = editor.pointer.hoverRegion, let region = editor.project.regions.first(where: { $0.id == id }),
+              let lane = lanes[region.trackId] else { return }
+        let handles = FadeHandles(region, editor: editor, lane: lane)
         let size = Float(TimelineLayout.handleSize) * s
         for corner in [handles.inCorner, handles.outCorner] {
             let cx = Float(corner.x) * s, cy = Float(corner.y) * s
@@ -446,10 +494,10 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
 
     // MARK: Waveforms
 
-    private func rebuildWaveformsIfNeeded(_ editor: EditorController, size: CGSize, scale: CGFloat) {
+    private func rebuildWaveformsIfNeeded(_ editor: EditorController, lanes: [Lane], size: CGSize, scale: CGFloat) {
         let doc = editor.document
         let key = WaveKey(revision: doc.revision, loadedCount: doc.loaded.count, viewStart: editor.viewStart,
-                          spp: editor.samplesPerPoint, amplitude: editor.amplitudeZoom, size: size)
+                          spp: editor.samplesPerPoint, amplitude: editor.amplitudeZoom, size: size, layout: editor.layoutVersion)
         if key == waveKey { return }
         waveKey = key
         waveRebuilds += 1
@@ -471,13 +519,19 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
         let w = Double(size.width)
         let s = Double(scale)
         let fpp = editor.samplesPerPoint / s
-        let top = Double(TimelineLayout.regionTop(size.height / scale) + TimelineLayout.nameStrip) * s + 2 * s
-        let bottom = Double(TimelineLayout.regionBottom(size.height / scale)) * s - 2 * s
-        let color = Theme.accent.blended(withFraction: 0.45, of: .white)!.withAlphaComponent(0.95).rgba
-        let centerLine = Theme.accent.withAlphaComponent(0.35).rgba
+        let viewport = editor.laneViewport
+        var colors: [UUID: (SIMD4<Float>, SIMD4<Float>)] = [:]
+        var spans: [UUID: (Double, Double)] = [:]
+        for lane in lanes where lane.bottom > viewport.top && lane.top < viewport.bottom {
+            let accent = Theme.trackColor(lane.track.color)
+            colors[lane.track.id] = (accent.blended(withFraction: 0.45, of: .white)!.withAlphaComponent(0.95).rgba,
+                                     accent.withAlphaComponent(0.35).rgba)
+            spans[lane.track.id] = (lane.waveTop * s + 2 * s, lane.bodyBottom * s - 2 * s)
+        }
 
         for region in doc.project.regions {
-            guard let loaded = doc.loaded[region.sourceId] else { continue }
+            guard let (top, bottom) = spans[region.trackId], let (color, centerLine) = colors[region.trackId],
+                  bottom - top > 2, let loaded = doc.loaded[region.sourceId] else { continue }
             let x0 = editor.x(forFrame: Double(region.position)) * s
             let x1 = editor.x(forFrame: Double(region.end)) * s
             if x1 < 0 || x0 > w { continue }

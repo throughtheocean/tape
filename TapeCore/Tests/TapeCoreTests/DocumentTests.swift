@@ -21,18 +21,18 @@ final class DocumentTests: XCTestCase {
         try pkg.save(ProjectFile(document: project, view: view))
 
         let reopened = try TapePackage(url: pkg.url).load()
-        XCTAssertEqual(reopened.version, 1)
+        XCTAssertEqual(reopened.version, 2)
         XCTAssertEqual(reopened.document, project)
         XCTAssertEqual(reopened.document.regions, project.regions)
         XCTAssertEqual(reopened.view, view)
 
         let json = try String(contentsOf: pkg.projectURL, encoding: .utf8)
-        XCTAssertTrue(json.contains("\"version\" : 1"))
+        XCTAssertTrue(json.contains("\"version\" : 2"))
     }
 
     func testNewerVersionIsRejected() throws {
         let pkg = try TapePackage.create(at: TestAudio.tempDirectory().appendingPathComponent("New.tape"))
-        let json = try String(contentsOf: pkg.projectURL, encoding: .utf8).replacingOccurrences(of: "\"version\" : 1", with: "\"version\" : 99")
+        let json = try String(contentsOf: pkg.projectURL, encoding: .utf8).replacingOccurrences(of: "\"version\" : 2", with: "\"version\" : 99")
         try json.write(to: pkg.projectURL, atomically: true, encoding: .utf8)
         XCTAssertThrowsError(try pkg.load())
     }

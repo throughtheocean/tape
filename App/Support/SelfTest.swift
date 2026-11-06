@@ -99,6 +99,8 @@ final class SelfTest {
             case "select": c.timeline.sideBar.select.toggle()
             case "blade": c.timeline.sideBar.blade.toggle()
             case "snap": c.timeline.sideBar.snap.toggle()
+            case "lanesize": c.timeline.sideBar.laneSize.action()
+            case "expand": c.timeline.sideBar.expand.toggle()
             default: write("no button \(args.first ?? "")")
             }
         case "snapshot":
@@ -149,6 +151,12 @@ final class SelfTest {
             write("files in \(dir): \(names.count): \(names.joined(separator: ", "))")
         case "compare":
             compare(args, controller: c)
+        case "header":
+            header(args, controller: c)
+        case "master":
+            master(args, controller: c)
+        case "meters":
+            meters(c, label: args.joined(separator: " "))
         case "quit":
             flushLog()
             NSApp.terminate(nil)
@@ -190,21 +198,30 @@ final class SelfTest {
     }
 
     /// `y` is points from the top of the track view, or a name: top (fade handle row), strip (region name),
-    /// wave (middle of the waveform), minimap.
-    /// A name may carry an offset in points, for example `wave-40`.
-    private func y(_ token: String, _ view: NSView) -> CGFloat {
-        let top = TimelineLayout.regionTop(view.bounds.height)
-        let bottom = TimelineLayout.regionBottom(view.bounds.height)
+    /// wave (middle of the waveform), minimap. Names refer to the selected track's lane, or to track N with `:N`
+    /// (1 based), for example `wave:3`. A name may carry an offset in points, for example `wave-40`.
+    private func y(_ token: String, _ editor: EditorController) -> CGFloat {
         var name = token
         var offset: CGFloat = 0
-        if let i = token.dropFirst().firstIndex(where: { $0 == "+" || $0 == "-" }) {
-            name = String(token[..<i])
-            offset = CGFloat(Double(token[i...]) ?? 0)
+        var trackNumber: Int?
+        if let colon = name.firstIndex(of: ":") {
+            let rest = name[name.index(after: colon)...]
+            let digits = rest.prefix { $0.isNumber }
+            trackNumber = Int(digits)
+            name = String(name[..<colon]) + rest.dropFirst(digits.count)
         }
+        if let i = name.dropFirst().firstIndex(where: { $0 == "+" || $0 == "-" }) {
+            offset = CGFloat(Double(name[i...]) ?? 0)
+            name = String(name[..<i])
+        }
+        let tracks = editor.project.tracks
+        let id = trackNumber.map { tracks[min(max($0 - 1, 0), tracks.count - 1)].id } ?? editor.selectedTrackID
+        let lane = editor.lane(for: id) ?? editor.lanes()[0]
+        let top = CGFloat(lane.bodyTop), bottom = CGFloat(lane.bodyBottom)
         switch name {
-        case "top": return TimelineLayout.waveTop(view.bounds.height) + offset
-        case "strip": return top + TimelineLayout.nameStrip / 2 + offset
-        case "wave": return (top + TimelineLayout.nameStrip + bottom) / 2 + offset
+        case "top": return CGFloat(lane.waveTop) + offset
+        case "strip": return top + CGFloat(lane.strip) / 2 + offset
+        case "wave": return (CGFloat(lane.waveTop) + bottom) / 2 + offset
         case "below": return bottom + 4 + offset
         case "minimap": return TimelineLayout.minimapHeight / 2 + offset
         default: return CGFloat(Double(token) ?? 0)
@@ -330,7 +347,8 @@ final class SelfTest {
                                               sampleFormat: SampleFormat(rawValue: args[2]) ?? .int24,
                                               sampleRate: Double(args[3]) ?? 48000, layout: ChannelLayout(rawValue: args[4]) ?? .session)
         case "pattern":
-            session.pattern = args.dropFirst().joined(separator: " ")
+            let pattern = args.dropFirst().joined(separator: " ")
+            if session.scope == .stems { session.stemPattern = pattern } else { session.pattern = pattern }
         case "dither":
             session.settings.dither = args.count > 1 && args[1] == "on"
         case "state":
@@ -349,7 +367,7 @@ final class SelfTest {
     private func context(_ args: [String], controller c: MainWindowController) {
         guard args.count >= 2, let window = c.window else { return }
         let view = c.timeline.metalView
-        let p = NSPoint(x: x(args[0], c.editor), y: y(args[1], view))
+        let p = NSPoint(x: x(args[0], c.editor), y: y(args[1], c.editor))
         guard let e = NSEvent.mouseEvent(with: .rightMouseDown, location: view.convert(p, to: nil), modifierFlags: [],
                                          timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
                                          context: nil, eventNumber: 0, clickCount: 1, pressure: 1),
@@ -385,8 +403,12 @@ final class SelfTest {
         var list = c.tapeDocument.editList()
         var span = SampleRange(start: 0, end: list.length)
         if args.count > 1, args[1] == "region", let r = c.editor.selectedRegions.first {
-            list = EditList(regions: [r], sources: list.sources, channelCount: list.channelCount)
+            list = list.with(regions: [r])
             span = r.timelineRange
+        }
+        if args.count > 2, args[1] == "stem", let n = Int(args[2]), n >= 1, n <= c.editor.project.tracks.count {
+            list = list.stem(c.editor.project.tracks[n - 1].id)
+            span = SampleRange(start: 0, end: c.tapeDocument.editList().length)
         }
         let n = Int(span.length)
         let out = SampleBuffer(channelCount: list.channelCount, capacity: max(n, 1))
@@ -457,7 +479,7 @@ final class SelfTest {
     private func mouse(_ args: [String], controller: MainWindowController) {
         guard args.count >= 3, let window = controller.window else { return }
         let view = controller.timeline.metalView
-        let p = NSPoint(x: x(args[1], controller.editor), y: y(args[2], view))
+        let p = NSPoint(x: x(args[1], controller.editor), y: y(args[2], controller.editor))
         let mods = args.count > 3 ? modifiers(args[3]) : []
         let clicks = args.count > 4 ? Int(args[4]) ?? 1 : 1
         let location = view.convert(p, to: nil)
@@ -496,10 +518,96 @@ final class SelfTest {
         write(s)
         for (i, r) in d.project.regions.enumerated() {
             let sel = e.selection.contains(r.id) ? "*" : " "
+            let track = d.project.tracks.count > 1 ? " track \((d.project.trackIndex(r.trackId) ?? -1) + 1)" : ""
             write(String(format: "  %@%d %@ pos %lld len %lld in %lld out %lld gain %.2f fadeIn %lld %@ %.2f fadeOut %lld %@ %.2f",
                          sel, i, r.name, r.position, r.length, r.sourceIn, r.sourceOut, r.gainDB,
-                         r.fadeIn.length, r.fadeIn.shape.rawValue, r.fadeIn.blend, r.fadeOut.length, r.fadeOut.shape.rawValue, r.fadeOut.blend))
+                         r.fadeIn.length, r.fadeIn.shape.rawValue, r.fadeIn.blend, r.fadeOut.length, r.fadeOut.shape.rawValue, r.fadeOut.blend)
+                  + track)
         }
+        guard e.multitrack || d.project.tracks.count > 1 else { return }
+        write(String(format: "  view %@ selectedTrack %d headerFocused %@ laneHeight %.0f expand %@ laneScroll %.0f master %.2f",
+                     e.multitrack ? "multi" : "single", (d.project.trackIndex(e.selectedTrackID) ?? -1) + 1,
+                     e.headerFocused ? "true" : "false", e.laneHeight, e.expandSelected ? "true" : "false", e.laneScroll,
+                     d.project.master.gainDB))
+        for (i, t) in d.project.tracks.enumerated() {
+            let lane = e.lane(for: t.id).map { String(format: "%.0f+%.0f", $0.top, $0.height) } ?? "hidden"
+            write(String(format: "  T%d %@ color %d gain %.2f pan %.2f mute %@ solo %@ regions %d lane %@",
+                         i + 1, t.name, t.color, t.gainDB, t.pan, t.mute ? "true" : "false", t.solo ? "true" : "false",
+                         d.project.regions(onTrack: t.id).count, lane))
+        }
+    }
+
+    /// `header <track> <down|drag|up|click|double> <zone>[@fraction][+dy|-dy]`: mouse on a track header.
+    /// Zones: name, swatch, mute, solo, gain, pan, meter, body. The fraction places x along a slider.
+    private func header(_ args: [String], controller c: MainWindowController) {
+        guard args.count >= 3, let n = Int(args[0]), n >= 1, n <= c.editor.project.tracks.count else {
+            write("header: bad arguments")
+            return
+        }
+        let id = c.editor.project.tracks[n - 1].id
+        c.timeline.headers.refresh()
+        guard let view = c.timeline.headers.header(for: id) else {
+            write("header: track \(n) not shown")
+            return
+        }
+        var spec = args[2]
+        var dy: CGFloat = 0
+        if let i = spec.dropFirst().firstIndex(where: { $0 == "+" || $0 == "-" }) {
+            dy = CGFloat(Double(spec[i...]) ?? 0)
+            spec = String(spec[..<i])
+        }
+        let parts = spec.split(separator: "@")
+        let fraction = parts.count > 1 ? Double(parts[1]) : nil
+        var p = view.point(zone: String(parts[0]), fraction: fraction)
+        p.y += dy
+        let location = view.convert(p, to: nil)
+        func event(_ type: NSEvent.EventType, clicks: Int = 1) -> NSEvent {
+            NSEvent.mouseEvent(with: type, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                               windowNumber: c.window?.windowNumber ?? 0, context: nil, eventNumber: 0, clickCount: clicks,
+                               pressure: 1)!
+        }
+        switch args[1] {
+        case "down": view.mouseDown(with: event(.leftMouseDown))
+        case "drag": view.mouseDragged(with: event(.leftMouseDragged))
+        case "up": view.mouseUp(with: event(.leftMouseUp))
+        case "click":
+            view.mouseDown(with: event(.leftMouseDown))
+            view.mouseUp(with: event(.leftMouseUp))
+        case "double":
+            view.mouseDown(with: event(.leftMouseDown, clicks: 2))
+            view.mouseUp(with: event(.leftMouseUp, clicks: 2))
+        default: write("header: unknown action \(args[1])")
+        }
+    }
+
+    /// `master <add|gain@fraction|double>`: the master strip.
+    private func master(_ args: [String], controller c: MainWindowController) {
+        let view = c.timeline.headers.master
+        let spec = args.first ?? ""
+        let parts = spec.split(separator: "@")
+        let p = view.point(zone: String(parts[0]), fraction: parts.count > 1 ? Double(parts[1]) : nil)
+        let location = view.convert(p, to: nil)
+        func event(_ type: NSEvent.EventType, clicks: Int) -> NSEvent {
+            NSEvent.mouseEvent(with: type, location: location, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                               windowNumber: c.window?.windowNumber ?? 0, context: nil, eventNumber: 0, clickCount: clicks,
+                               pressure: 1)!
+        }
+        let clicks = args.count > 1 && args[1] == "double" ? 2 : 1
+        view.mouseDown(with: event(.leftMouseDown, clicks: clicks))
+        view.mouseUp(with: event(.leftMouseUp, clicks: clicks))
+    }
+
+    /// Logs the meters as the header column shows them.
+    private func meters(_ c: MainWindowController, label: String) {
+        let e = c.editor
+        var s = "meters \(label):"
+        for (i, t) in e.project.tracks.enumerated() {
+            let m = e.trackMeters[t.id] ?? MeterBallistics()
+            s += String(format: " T%d %.1f/%.1f%@", i + 1, m.levelDB, m.holdDB, m.clipped ? " clip" : "")
+        }
+        s += " master"
+        for m in e.masterMeters { s += String(format: " %.1f/%.1f%@", m.levelDB, m.holdDB, m.clipped ? " clip" : "") }
+        write(s)
     }
 
     private func snapshot(_ c: MainWindowController, to path: String) {

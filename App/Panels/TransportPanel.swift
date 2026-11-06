@@ -31,6 +31,26 @@ struct TransportPanel: View {
 
             Spacer(minLength: 8)
 
+            Picker("", selection: $editor.multitrack) {
+                Text("Single").tag(false)
+                Text("Multi").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .help("Single or multitrack view (Shift Command M)")
+
+            Picker("", selection: Binding(get: { editor.selectedTrackID },
+                                          set: { editor.selectTrack($0, header: false); editor.revealSelectedLane() })) {
+                ForEach(document.project.tracks) { Text($0.name).tag($0.id) }
+            }
+            .labelsHidden()
+            .frame(width: 120)
+            .disabled(document.project.tracks.count < 2)
+            .help("Track shown in the single view")
+
+            Spacer(minLength: 8)
+
             Text(rateText)
                 .font(.system(size: 12).monospacedDigit())
                 .foregroundStyle(Color.tapeSecondary)

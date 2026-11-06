@@ -22,6 +22,7 @@ final class RecordController: ObservableObject {
 
     private var target: EditorController?
     private var placement: Int64 = 0
+    private var recordTrack = Track.firstID
     private var fileName = ""
     private var statusTimer: Timer?
 
@@ -155,11 +156,15 @@ final class RecordController: ObservableObject {
         if editor.isPlaying { editor.stop() }
         let doc = editor.document
         let p = editor.playhead
-        if let r = doc.project.regions.first(where: { $0.position <= p && p < $0.end }) {
-            placement = settings.recordSnapAfterRegion ? r.end : doc.project.length
+        // Multitrack records onto the selected track (the first when none is selected); placement looks at that track only.
+        let track = editor.selectedTrackID
+        let onTrack = doc.project.regions(onTrack: track)
+        if let r = onTrack.first(where: { $0.position <= p && p < $0.end }) {
+            placement = settings.recordSnapAfterRegion ? r.end : (onTrack.map(\.end).max() ?? 0)
         } else {
             placement = p
         }
+        recordTrack = track
         let stamp = DateFormatter.recordingStamp.string(from: Date())
         let format = AudioFileFormat(container: settings.recordContainer, sampleFormat: settings.recordSampleFormat,
                                      sampleRate: sampleRate, channelCount: channels.count)
@@ -173,6 +178,7 @@ final class RecordController: ObservableObject {
             return
         }
         target = editor
+        editor.recordingTrack = recordTrack
         isRecording = true
         elapsed = 0
         dropouts = 0
@@ -186,8 +192,10 @@ final class RecordController: ObservableObject {
         let editor = target
         target = nil
         editor?.recordingSpan = nil
+        editor?.recordingTrack = nil
         guard let result, let editor else { return }
-        let start = editor.document.addRecording(fileName: fileName, result: result, at: placement)
+        let track = editor.project.track(recordTrack) != nil ? recordTrack : editor.selectedTrackID
+        let start = editor.document.addRecording(fileName: fileName, result: result, at: placement, track: track)
         editor.locate(start)
         if result.dropouts > 0 {
             inputError = "\(result.dropouts) dropouts during the last recording."

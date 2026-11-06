@@ -38,9 +38,11 @@ public struct TapePackage: Sendable, Equatable {
         return file
     }
 
-    /// Atomic write, so a crash mid-save leaves the previous version intact.
+    /// Atomic write, so a crash mid-save leaves the previous version intact. Always writes the current format.
     public func save(_ file: ProjectFile) throws {
         try ensureDirectories()
+        var file = file
+        file.version = ProjectFile.currentVersion
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(file)

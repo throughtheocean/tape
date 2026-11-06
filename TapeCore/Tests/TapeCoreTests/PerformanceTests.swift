@@ -64,7 +64,7 @@ final class PerformanceTests: XCTestCase {
             ("FLAC 24 bit 96 kHz", ExportSettings(container: .flac, sampleFormat: .int24, sampleRate: 96000)),
             ("AAC 256 kbps", ExportSettings(container: .aac, sampleRate: 48000)),
         ] {
-            let jobs = Exporter.jobs(list: list, scope: .document, directory: dir, fileName: label, pattern: "", documentName: "",
+            let jobs = Exporter.jobs(list: list, scope: .mix, directory: dir, fileName: label, pattern: "", documentName: "",
                                      date: Date(), settings: settings)
             let t0 = CFAbsoluteTimeGetCurrent()
             try Exporter.export(jobs, sessionRate: rate, settings: settings)

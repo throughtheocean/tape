@@ -2,7 +2,6 @@ import AppKit
 import TapeCore
 
 extension TimelineLayout {
-    static func waveTop(_ height: CGFloat) -> CGFloat { regionTop(height) + nameStrip }
     static let handleSize: CGFloat = 8
     static let edgeGrab: CGFloat = 5
 }
@@ -15,9 +14,9 @@ struct FadeHandles {
     var outMid: CGPoint?
 
     @MainActor
-    init(_ r: Region, editor: EditorController, height: CGFloat) {
-        let top = TimelineLayout.waveTop(height)
-        let bottom = TimelineLayout.regionBottom(height)
+    init(_ r: Region, editor: EditorController, lane: Lane) {
+        let top = CGFloat(lane.waveTop)
+        let bottom = CGFloat(lane.bodyBottom)
         let x0 = editor.x(forFrame: Double(r.position)), x1 = editor.x(forFrame: Double(r.end))
         let inset = Double(TimelineLayout.handleSize) / 2 + 1
         let inX = max(editor.x(forFrame: Double(r.position + r.fadeIn.length)), x0 + inset)
@@ -45,30 +44,34 @@ extension TimelineMetalView {
         case empty
     }
 
-    private var height: CGFloat { bounds.height }
-
     /// Midpoint handles only take part with Option held, so plain clicks inside a fade select and move.
     func hitTest(at p: CGPoint, option: Bool) -> Hit {
-        let top = TimelineLayout.regionTop(height), bottom = TimelineLayout.regionBottom(height)
-        guard p.y >= top - TimelineLayout.handleSize, p.y <= bottom else { return .empty }
+        let y = Double(p.y)
+        let handle = Double(TimelineLayout.handleSize)
+        let viewport = editor.laneViewport
+        guard y >= viewport.top - handle, y <= viewport.bottom else { return .empty }
+        let lanes = editor.lanes().filter { y >= $0.bodyTop - handle && y <= $0.bodyBottom }
+        guard !lanes.isEmpty else { return .empty }
         let grab = TimelineLayout.handleSize / 2 + 3
-        let regions = editor.project.regions
         // Handles first, nearest wins; topmost region on ties.
         var best: (Hit, CGFloat)?
-        for r in regions.reversed() {
-            let x0 = editor.x(forFrame: Double(r.position)), x1 = editor.x(forFrame: Double(r.end))
-            if Double(p.x) < x0 - 8 || Double(p.x) > x1 + 8 { continue }
-            let h = FadeHandles(r, editor: editor, height: height)
-            var candidates: [(CGPoint?, Hit)] = [(h.inCorner, .handle(r, .fadeIn)), (h.outCorner, .handle(r, .fadeOut))]
-            if option { candidates += [(h.inMid, .mid(r, .fadeIn)), (h.outMid, .mid(r, .fadeOut))] }
-            for (point, hit) in candidates {
-                guard let point else { continue }
-                let d = max(abs(point.x - p.x), abs(point.y - p.y))
-                if d <= grab, best == nil || d < best!.1 { best = (hit, d) }
+        for lane in lanes {
+            for r in editor.project.regions.reversed() where r.trackId == lane.track.id {
+                let x0 = editor.x(forFrame: Double(r.position)), x1 = editor.x(forFrame: Double(r.end))
+                if Double(p.x) < x0 - 8 || Double(p.x) > x1 + 8 { continue }
+                let h = FadeHandles(r, editor: editor, lane: lane)
+                var candidates: [(CGPoint?, Hit)] = [(h.inCorner, .handle(r, .fadeIn)), (h.outCorner, .handle(r, .fadeOut))]
+                if option { candidates += [(h.inMid, .mid(r, .fadeIn)), (h.outMid, .mid(r, .fadeOut))] }
+                for (point, hit) in candidates {
+                    guard let point else { continue }
+                    let d = max(abs(point.x - p.x), abs(point.y - p.y))
+                    if d <= grab, best == nil || d < best!.1 { best = (hit, d) }
+                }
             }
         }
         if let best { return best.0 }
-        guard p.y >= top else { return .empty }
+        guard let lane = lanes.first(where: { y >= $0.bodyTop }) else { return .empty }
+        let regions = editor.project.regions.filter { $0.trackId == lane.track.id }
         // Trim edges: on a shared edge the side the pointer is on decides.
         var edge: (Hit, CGFloat)?
         for r in regions.reversed() {
@@ -83,7 +86,8 @@ extension TimelineMetalView {
             }
         }
         if let edge { return edge.0 }
-        if let r = editor.region(at: editor.frame(forX: Double(p.x))) { return .body(r) }
+        let frame = editor.frame(forX: Double(p.x))
+        if let r = regions.last(where: { Double($0.position) <= frame && frame < Double($0.end) }) { return .body(r) }
         return .empty
     }
 
@@ -124,9 +128,18 @@ extension TimelineMetalView {
         let frame = frameAt(p)
 
         if event.clickCount == 2, case let .body(r) = hit {
+            editor.selectTrack(r.trackId, header: false)
             editor.selection = [r.id]
             editor.focusRegionName.send()
             return
+        }
+        switch hit {
+        case let .body(r), let .edge(r, _), let .handle(r, _), let .mid(r, _):
+            editor.selectTrack(r.trackId, header: false)
+        case .empty:
+            if editor.multitrack, let lane = editor.lane(atY: Double(p.y)), Double(p.y) >= editor.laneViewport.top {
+                editor.selectTrack(lane.track.id, header: false)
+            }
         }
         if editor.tool == .blade {
             if case let .body(r) = hit {
@@ -174,9 +187,9 @@ extension TimelineMetalView {
                 return
             }
             if !editor.selection.contains(r.id) { editor.selection = [r.id] }
-            drag = .pressRegion(id: r.id, downX: Double(p.x), downFrame: frame)
+            drag = .pressRegion(id: r.id, downX: Double(p.x), downY: Double(p.y), downFrame: frame)
         default:
-            drag = .pressEmpty(downX: Double(p.x), additive: flags.contains(.command))
+            drag = .pressEmpty(downX: Double(p.x), downY: Double(p.y), additive: flags.contains(.command))
         }
     }
 
@@ -204,17 +217,28 @@ extension TimelineMetalView {
             minimapScroll(to: Double(p.x), grabOffset: grabOffset)
         case let .minimapEdge(left, fixedFrame):
             minimapEdge(to: Double(p.x), left: left, fixedFrame: fixedFrame)
-        case let .pressRegion(_, downX, downFrame):
-            guard abs(Double(p.x) - downX) >= 3 else { return }
+        case let .pressRegion(_, downX, downY, downFrame):
+            let lanes = editor.multitrack && abs(Double(p.y) - downY) >= 6
+            guard abs(Double(p.x) - downX) >= 3 || lanes else { return }
             beginGesture()
-            drag = .move(ids: editor.selectedIDs, downFrame: downFrame)
+            drag = .move(ids: editor.selectedIDs, downFrame: downFrame, downLane: editor.lane(atY: downY)?.index ?? 0)
             mouseDragged(with: event)
-        case let .move(ids, downFrame):
+        case let .move(ids, downFrame, downLane):
             var delta = frame - downFrame
             if !flags.contains(.command) { delta = editor.snapMove(delta: delta, ids: ids, base: gestureBase) }
+            let laneDelta = editor.multitrack ? (editor.lane(atY: Double(p.y), clamped: true)?.index ?? downLane) - downLane : 0
             var applied: Int64 = 0
-            doc.updateGesture { applied = EditOperations.move(&$0, ids: ids, by: delta) }
-            hint(editor.durationText(applied), at: p)
+            var lanes = 0
+            doc.updateGesture {
+                applied = EditOperations.move(&$0, ids: ids, by: delta)
+                lanes = EditOperations.moveToTrack(&$0, ids: ids, byLanes: laneDelta)
+            }
+            if lanes != 0, let id = ids.first, let r = editor.project.regions.first(where: { $0.id == id }),
+               let t = editor.project.track(r.trackId) {
+                hint("\(editor.durationText(applied))  \(t.name)", at: p)
+            } else {
+                hint(editor.durationText(applied), at: p)
+            }
         case let .trim(id, start):
             guard let r = gestureBase.regions.first(where: { $0.id == id }) else { return }
             let edge = editor.snapEdge(frame, excluding: [id], region: r, zeroCrossing: !flags.contains(.command))
@@ -247,14 +271,23 @@ extension TimelineMetalView {
             let edge = flags.contains(.command) ? frame : editor.snapped(frame)
             editor.setRange(SampleRange(start: anchor, end: edge))
             if let r = editor.range { hint(editor.lengthText(r.length), at: p) }
-        case let .pressEmpty(downX, additive):
-            guard abs(Double(p.x) - downX) >= 3 else { return }
-            drag = .rubber(anchor: editor.frame(forX: downX), base: additive ? editor.selection : [])
+        case let .pressEmpty(downX, downY, additive):
+            guard abs(Double(p.x) - downX) >= 3 || abs(Double(p.y) - downY) >= 3 else { return }
+            drag = .rubber(anchor: editor.frame(forX: downX), anchorY: downY, base: additive ? editor.selection : [])
             mouseDragged(with: event)
-        case let .rubber(anchor, base):
+        case let .rubber(anchor, anchorY, base):
             let f = editor.frame(forX: Double(p.x))
             let band = SampleRange(start: Int64(min(anchor, f)), end: Int64(max(anchor, f).rounded(.up)))
-            let hits = editor.project.regions.filter { $0.position < band.end && $0.end > band.start }.map(\.id)
+            var tracks = editor.visibleTrackIDs
+            if editor.multitrack {
+                let y0 = min(anchorY, Double(p.y)), y1 = max(anchorY, Double(p.y))
+                tracks = Set(editor.lanes().filter { $0.bottom > y0 && $0.top < y1 }.map(\.track.id))
+                editor.pointer.rubberTop = max(y0, editor.laneViewport.top)
+                editor.pointer.rubberBottom = min(y1, editor.laneViewport.bottom)
+            }
+            let hits = editor.project.regions.filter {
+                tracks.contains($0.trackId) && $0.position < band.end && $0.end > band.start
+            }.map(\.id)
             editor.selection = base.union(hits)
             editor.pointer.rubberBand = band
         }
@@ -269,6 +302,11 @@ extension TimelineMetalView {
         }
         if p.x < 0 { editor.scroll(byPoints: Double(p.x) / 4) }
         if p.x > bounds.width { editor.scroll(byPoints: Double(p.x - bounds.width) / 4) }
+        if editor.multitrack {
+            let v = editor.laneViewport
+            if Double(p.y) < v.top { editor.scrollLanes(by: (Double(p.y) - v.top) / 4) }
+            if Double(p.y) > v.bottom { editor.scrollLanes(by: (Double(p.y) - v.bottom) / 4) }
+        }
     }
 
     static func shapeText(_ fade: Fade) -> String {
@@ -279,6 +317,7 @@ extension TimelineMetalView {
     private func hint(_ text: String, at p: CGPoint) {
         editor.pointer.hint = text
         editor.pointer.hintX = Double(p.x)
+        editor.pointer.hintY = editor.multitrack ? Double(p.y) : nil
     }
 
     // MARK: Up
@@ -287,14 +326,14 @@ extension TimelineMetalView {
         let p = convert(event.locationInWindow, from: nil)
         let doc = editor.document
         switch drag {
-        case let .pressRegion(id, _, _):
+        case let .pressRegion(id, _, _, _):
             editor.selection = [id]
             editor.locate(frameAt(p))
         case .move: doc.endGesture("Move")
         case .trim: doc.endGesture("Trim")
         case .fade: doc.endGesture("Fade")
         case .fadeShape: doc.endGesture("Fade Shape")
-        case let .pressEmpty(_, additive):
+        case let .pressEmpty(_, _, additive):
             if !additive { editor.selection = [] }
             editor.locate(frameAt(p))
         default:
@@ -303,7 +342,10 @@ extension TimelineMetalView {
         if doc.isInGesture { doc.endGesture("Edit") }
         drag = .none
         editor.pointer.hint = nil
+        editor.pointer.hintY = nil
         editor.pointer.rubberBand = nil
+        editor.pointer.rubberTop = nil
+        editor.pointer.rubberBottom = nil
         updateHover(p, flags: event.modifierFlags)
     }
 
@@ -327,7 +369,7 @@ extension TimelineMetalView {
         overlay.hoverEdge = nil
         overlay.bladeFrame = nil
         let frame = editor.frame(forX: Double(p.x))
-        overlay.hoverRegion = editor.region(at: frame)?.id
+        overlay.hoverRegion = editor.region(at: frame, y: Double(p.y))?.id
         if editor.tool == .blade {
             if case let .body(r) = hit {
                 overlay.bladeFrame = editor.snapEdge(frameAt(p), excluding: [], region: r, zeroCrossing: !flags.contains(.command))

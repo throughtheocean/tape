@@ -1,0 +1,25 @@
+# M6: record onto the selected track (track 3) with pre-roll, in the multitrack view.
+wait 1
+import /tmp/tape-m6-a.wav
+waitLoaded
+fit
+key cmd+shift+m
+key cmd+t
+key cmd+t
+key cmd+t
+header 3 click body
+set device MacBook
+set preroll 1
+wait 2.5
+locate f48000
+key r
+wait 2
+log recording onto track 3
+key r
+wait 1
+waitLoaded
+log after take
+snapshot /tmp/tape-m6-record.png
+key cmd+z
+log undo take
+quit

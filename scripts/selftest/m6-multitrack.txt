@@ -1,0 +1,156 @@
+# M6: multitrack view, headers, moves between lanes, mute, solo, gain, pan, master, reorder, remove, stems.
+# Sources: /tmp/tape-m6-a.wav (4 s stereo 1 kHz at -6 dBFS) and /tmp/tape-m6-b.wav (3 s mono 440 Hz at -12 dBFS),
+# see docs/report.md, M6. Output goes to /tmp/tape-m6.
+wait 1
+import /tmp/tape-m6-a.wav
+waitLoaded
+fit
+set snap off
+log single view, one track
+snapshot /tmp/tape-m6-single.png
+
+key cmd+shift+m
+log multitrack view
+key cmd+t
+log added track 2, selected
+import /tmp/tape-m6-b.wav
+waitLoaded
+fit
+log import lands on track 2 at the document end
+key cmd+t
+key cmd+t
+log four tracks
+snapshot /tmp/tape-m6-four.png
+
+# Drag the track 2 region down two lanes; one undo step brings it back.
+mouse down f250000 wave:2
+mouse drag f250000 wave:3
+mouse drag f250000 wave:4
+mouse up f250000 wave:4
+log region moved to track 4
+key cmd+z
+log undo move
+key cmd+shift+z
+log redo move
+
+# Header controls.
+header 1 click mute
+log mute track 1
+header 1 click mute
+header 4 click solo
+log solo track 4
+header 4 click solo
+header 1 down gain@0.5
+header 1 drag gain@0.45
+header 1 drag gain@0.4
+header 1 up gain@0.4
+log gain drag, one undo step
+key cmd+z
+log undo gain
+header 1 double gain
+header 4 down pan@0.25
+header 4 up pan@0.25
+log pan track 4 left 50
+header 4 double pan
+log pan reset
+master gain@0.5
+log master gain
+master gain double
+log master reset
+
+# Meters while playing: track 1 is a -6 dBFS stereo sine at unity gain, so it reads -6.0; track 2 is empty here.
+locate f0
+key space
+wait 1.5
+meters playing
+key space
+locate f0
+
+# Reorder: drag track 4's header above track 1.
+header 4 down body
+header 4 drag body-100
+header 4 drag body-300
+header 4 up body-300
+log track 4 moved to the top
+key cmd+z
+log undo reorder
+
+# Lane height and expand.
+button lanesize
+log lane height 160
+button expand
+log expand selected
+button expand
+button lanesize
+log lane height 40
+button lanesize
+log lane height 80
+
+# A rubber band from empty space on track 1 down to track 4 selects regions on both.
+mouse down f340000 wave:1
+mouse drag f150000 wave:3
+mouse drag f150000 wave:4
+mouse up f150000 wave:4
+log rubber band over tracks 1 to 4
+# A range spans all tracks; Cmd B blades every track at its edges.
+mouse click f340000 wave:2
+mouse down f100000 wave:2 shift
+mouse drag f250000 wave:2 shift
+mouse up f250000 wave:2 shift
+key cmd+b
+log blade every track at the range edges
+key cmd+z
+key opt+x
+
+# Remove a track with regions asks first; an empty track goes without asking.
+header 4 click body
+key delete
+log alert for track with regions
+sheet escape
+header 3 click body
+key delete
+log empty track 3 removed
+key cmd+z
+log undo remove
+
+# Stems: one file per track, post gain and pan, mute respected (the muted empty track 2 writes no file).
+header 4 down pan@0.25
+header 4 up pan@0.25
+header 1 down gain@0.5
+header 1 up gain@0.5
+header 2 click mute
+key cmd+e
+wait 0.5
+export preset none
+export scope stems
+export format wav float32 48000 session
+export state
+exportto /tmp/tape-m6/stems
+sheet return
+waitExport
+files /tmp/tape-m6/stems
+key cmd+e
+wait 0.5
+export scope stems
+export pattern {name}-{index:02}
+export state
+exportto /tmp/tape-m6/stems-indexed
+sheet return
+waitExport
+files /tmp/tape-m6/stems-indexed
+compare /tmp/tape-m6/stems-indexed/Untitled-01.wav stem 1
+compare /tmp/tape-m6/stems-indexed/Untitled-03.wav stem 4
+header 2 click mute
+key cmd+e
+wait 0.5
+export scope mix
+exportto /tmp/tape-m6/mix.wav
+sheet return
+waitExport
+compare /tmp/tape-m6/mix.wav
+
+# Back to the single view: track popup shows the selected track, others are hidden.
+key cmd+shift+m
+log single view again
+snapshot /tmp/tape-m6-single-after.png
+quit

@@ -59,11 +59,20 @@ enum MainMenu {
         item(view, "Zoom Out", #selector(MainWindowController.zoomOutTimeline(_:)), "-")
         item(view, "Zoom to Fit", #selector(MainWindowController.zoomToFit(_:)), "z", [.shift])
         view.addItem(.separator())
+        item(view, "Multitrack", #selector(MainWindowController.toggleMultitrack(_:)), "m", [.command, .shift])
+        view.addItem(.separator())
         item(view, "Snap to Zero Crossing", #selector(MainWindowController.toggleSnapToZero(_:)), "n", [])
         view.addItem(.separator())
         item(view, "Hide Inspector", #selector(MainWindowController.toggleInspector(_:)), "i", [.command, .option])
         view.addItem(.separator())
         item(view, "Enter Full Screen", #selector(NSWindow.toggleFullScreen(_:)), "f", [.command, .control])
+
+        let track = submenu(main, "Track")
+        item(track, "Add Track", #selector(MainWindowController.addTrack(_:)), "t")
+        item(track, "Remove Track...", #selector(MainWindowController.removeTrack(_:)), "")
+        track.addItem(.separator())
+        item(track, "Lane Height", #selector(MainWindowController.cycleLaneHeight(_:)), "")
+        item(track, "Expand Selected Track", #selector(MainWindowController.toggleExpandTrack(_:)), "")
 
         let process = submenu(main, "Process")
         for kind in ProcessKind.allCases {

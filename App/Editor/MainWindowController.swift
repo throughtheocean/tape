@@ -281,7 +281,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
 
     func importAudio(urls: [URL]) {
         do {
-            try tapeDocument.importAudio(urls)
+            try tapeDocument.importAudio(urls, track: editor.selectedTrackID)
         } catch {
             showError(error.localizedDescription)
         }
@@ -316,7 +316,13 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
 
     override func selectAll(_ sender: Any?) { editor.selectAll() }
     @objc func bladeRegions(_ sender: Any?) { editor.blade() }
-    @objc func deleteRegions(_ sender: Any?) { editor.deleteSelection(ripple: true) }
+    @objc func deleteRegions(_ sender: Any?) {
+        if editor.multitrack, editor.headerFocused, editor.selectedIDs.isEmpty {
+            removeTrack(sender)
+        } else {
+            editor.deleteSelection(ripple: true)
+        }
+    }
     @objc func deleteRegionsLeavingGap(_ sender: Any?) { editor.deleteSelection(ripple: false) }
     @objc func duplicateRegions(_ sender: Any?) { editor.duplicateSelection() }
     @objc func applyDefaultFades(_ sender: Any?) { editor.applyDefaultFades() }
@@ -440,6 +446,36 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         setInspectorVisible(true)
     }
 
+    // MARK: Tracks
+
+    @objc func toggleMultitrack(_ sender: Any?) { editor.multitrack.toggle() }
+    @objc func addTrack(_ sender: Any?) { editor.addTrack() }
+    @objc func cycleLaneHeight(_ sender: Any?) { editor.cycleLaneHeight() }
+    @objc func toggleExpandTrack(_ sender: Any?) { editor.expandSelected.toggle() }
+
+    /// Removes the selected track, asking first when it holds regions.
+    @objc func removeTrack(_ sender: Any?) {
+        let track = editor.selectedTrack
+        guard let window, editor.project.tracks.count > 1 else { return }
+        let count = editor.project.regions(onTrack: track.id).count
+        guard count > 0 else {
+            editor.removeTrack(track.id)
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = "Remove \(track.name)?"
+        alert.informativeText = "Its \(count) region\(count == 1 ? "" : "s") will be removed with it. You can undo this."
+        alert.addButton(withTitle: "Remove")
+        alert.addButton(withTitle: "Cancel")
+        openAlert = alert
+        alert.beginSheetModal(for: window) { response in
+            MainActor.assumeIsolated {
+                self.openAlert = nil
+                if response == .alertFirstButtonReturn { self.editor.removeTrack(track.id) }
+            }
+        }
+    }
+
     @objc func toggleSnapToZero(_ sender: Any?) {
         AppSettings.shared.snapToZeroCrossing.toggle()
         editor.needsDisplay?()
@@ -475,7 +511,23 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             return true
         case #selector(clearRange(_:)):
             return editor.range != nil
-        case #selector(deleteRegions(_:)), #selector(deleteRegionsLeavingGap(_:)), #selector(duplicateRegions(_:)),
+        case #selector(toggleMultitrack(_:)):
+            item.state = editor.multitrack ? .on : .off
+            return true
+        case #selector(addTrack(_:)):
+            return !RecordController.shared.isRecording
+        case #selector(removeTrack(_:)):
+            return editor.project.tracks.count > 1 && !RecordController.shared.isRecording
+        case #selector(cycleLaneHeight(_:)):
+            item.title = "Lane Height: \(Int(editor.laneHeight)) pt"
+            return editor.multitrack
+        case #selector(toggleExpandTrack(_:)):
+            item.state = editor.expandSelected ? .on : .off
+            return editor.multitrack
+        case #selector(deleteRegions(_:)):
+            return !editor.selectedIDs.isEmpty
+                || (editor.multitrack && editor.headerFocused && editor.project.tracks.count > 1 && !RecordController.shared.isRecording)
+        case #selector(deleteRegionsLeavingGap(_:)), #selector(duplicateRegions(_:)),
              #selector(applyDefaultFades(_:)), #selector(showFadeDialog(_:)), #selector(nudgeLeft(_:)), #selector(nudgeRight(_:)):
             return !editor.selectedIDs.isEmpty
         case #selector(bladeRegions(_:)), #selector(selectAll(_:)):

@@ -11,7 +11,9 @@ struct InspectorPanel: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 let selected = document.project.regions.filter { editor.selection.contains($0.id) }
-                if selected.isEmpty {
+                if selected.isEmpty, editor.multitrack, editor.headerFocused {
+                    TrackInspector(editor: editor, track: editor.selectedTrack)
+                } else if selected.isEmpty {
                     documentSections
                 } else {
                     RegionInspector(editor: editor, regions: selected, format: format)
@@ -58,6 +60,8 @@ struct InspectorPanel: View {
         shortcut("N", "Snap to zero crossing")
         shortcut("Home  End", "Start, end")
         shortcut("Command I", "Import audio")
+        shortcut("Shift Cmd M", "Single or multitrack view")
+        shortcut("Command T", "Add track")
         shortcut("R", "Record, R or Space stops")
     }
 

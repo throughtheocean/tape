@@ -12,6 +12,13 @@ enum Theme {
 
     @MainActor static var accent: NSColor { AppSettings.shared.accentColor }
 
+    /// Track palette; color 0 is the accent, so a one track document looks as before tracks existed.
+    @MainActor static func trackColor(_ index: Int) -> NSColor {
+        let palette: [UInt32] = [0, 0xE8913A, 0x5DBB63, 0xA77BDB, 0xE05D5D, 0xD9C44A, 0x3FB8B0, 0xE070A8]
+        let i = ((index % palette.count) + palette.count) % palette.count
+        return i == 0 ? accent : NSColor(hex: palette[i])
+    }
+
     static func monoDigits(_ size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
         NSFont.monospacedDigitSystemFont(ofSize: size, weight: weight)
     }

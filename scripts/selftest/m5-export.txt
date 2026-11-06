@@ -19,7 +19,7 @@ key opt+x
 key cmd+e
 wait 0.5
 export preset none
-export scope document
+export scope mix
 export format wav float32 48000 session
 exportto /tmp/tape-m5/document.wav
 sheet return
@@ -84,7 +84,7 @@ compare /tmp/tape-m5/region.caf region
 # Split channels, 24 bit AIFF at 96 kHz.
 key cmd+e
 wait 0.5
-export scope document
+export scope mix
 export format aiff int24 96000 split
 exportto /tmp/tape-m5/split.aif
 sheet return

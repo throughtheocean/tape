@@ -14,17 +14,19 @@ extension EditorController {
 
     func ms(frames: Int64) -> Double { Double(frames) / sessionRate * 1000 }
 
-    /// Topmost region at `frame`; later regions draw over earlier ones.
+    /// Topmost visible region at `frame` on the selected track; later regions draw over earlier ones.
     func region(at frame: Double) -> Region? {
-        project.regions.last { Double($0.position) <= frame && frame < Double($0.end) }
+        project.regions.last { $0.trackId == selectedTrackID && Double($0.position) <= frame && frame < Double($0.end) }
     }
 
     // MARK: Commands
 
-    /// Cmd B: all regions at the playhead, or at both range edges if a range is set.
+    /// Cmd B: at the playhead, or at both range edges if a range is set. Every track in the multitrack view,
+    /// the shown track in the single view.
     func blade() {
         let frames = range.map { [$0.start, $0.end] } ?? [playhead]
-        document.apply("Blade") { EditOperations.blade(&$0, at: frames) }
+        let only: Set<UUID>? = multitrack ? nil : Set(visibleRegions.map(\.id))
+        document.apply("Blade") { EditOperations.blade(&$0, at: frames, only: only) }
     }
 
     /// Blade tool click: only the region under the pointer.
@@ -77,7 +79,8 @@ extension EditorController {
     }
 
     func selectAll() {
-        selection = Set(project.regions.map(\.id))
+        selection = Set(visibleRegions.map(\.id))
+        headerFocused = false
     }
 
     func setGain(_ dB: Double, ids: Set<UUID>) {
@@ -106,7 +109,7 @@ extension EditorController {
     /// Snaps an edge: other region edges and the playhead within 8 points win, otherwise the nearest zero
     /// crossing of `region`'s own source within 4 points when snapping is on and `zeroCrossing` is allowed.
     func snapEdge(_ frame: Int64, excluding ids: Set<UUID>, region: Region?, zeroCrossing: Bool) -> Int64 {
-        let targets = EditOperations.snapTargets(project, excluding: ids, extra: [playhead])
+        let targets = EditOperations.snapTargets(project, excluding: ids, extra: [playhead], tracks: visibleTrackIDs)
         if let t = EditOperations.nearest(frame, in: targets, tolerance: tolerance(points: 8)) { return t }
         guard zeroCrossing, AppSettings.shared.snapToZeroCrossing, let region,
               let source = document.loaded[region.sourceId]?.source else { return frame }
@@ -120,7 +123,7 @@ extension EditorController {
     /// Snaps a moved block of regions so one of its edges lands on another region edge or the playhead.
     func snapMove(delta: Int64, ids: Set<UUID>, base: Project) -> Int64 {
         let moved = base.regions.filter { ids.contains($0.id) }
-        let targets = EditOperations.snapTargets(base, excluding: ids, extra: [playhead])
+        let targets = EditOperations.snapTargets(base, excluding: ids, extra: [playhead], tracks: visibleTrackIDs)
         let tol = tolerance(points: 8)
         var best: Int64?
         for r in moved {

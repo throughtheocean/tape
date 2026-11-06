@@ -43,17 +43,21 @@ public enum EditOperations {
 
     // MARK: Delete
 
-    /// Removes `ids`. With `ripple`, the timeline span the removed regions covered, minus what remaining
-    /// regions still cover, is closed by moving later regions left.
+    /// Removes `ids`. With `ripple`, per track, the timeline span the removed regions covered, minus what remaining
+    /// regions of that track still cover, is closed by moving the track's later regions left. Other tracks stay.
     public static func delete(_ project: inout Project, ids: Set<UUID>, ripple: Bool) {
         let removed = project.regions.filter { ids.contains($0.id) }
         guard !removed.isEmpty else { return }
         project.regions.removeAll { ids.contains($0.id) }
         if ripple {
-            let gaps = subtract(union(removed.map(\.timelineRange)), union(project.regions.map(\.timelineRange)))
-            for gap in gaps.reversed() {
-                for i in project.regions.indices where project.regions[i].position >= gap.end {
-                    project.regions[i].position -= gap.length
+            for track in Set(removed.map(\.trackId)) {
+                let remaining = project.regions.filter { $0.trackId == track }
+                let gaps = subtract(union(removed.filter { $0.trackId == track }.map(\.timelineRange)),
+                                    union(remaining.map(\.timelineRange)))
+                for gap in gaps.reversed() {
+                    for i in project.regions.indices where project.regions[i].trackId == track && project.regions[i].position >= gap.end {
+                        project.regions[i].position -= gap.length
+                    }
                 }
             }
         }
@@ -62,14 +66,16 @@ public enum EditOperations {
 
     // MARK: Duplicate
 
-    /// Copies `ids` and places the copies right after the selection's span; later regions move right by the span.
-    /// Returns the ids of the copies.
+    /// Copies `ids` and places the copies right after the selection's span, on their own tracks; later regions
+    /// on those tracks move right by the span. Returns the ids of the copies.
     @discardableResult
     public static func duplicate(_ project: inout Project, ids: Set<UUID>) -> [UUID] {
         let selected = project.regions.filter { ids.contains($0.id) }
         guard let start = selected.map(\.position).min(), let end = selected.map(\.end).max() else { return [] }
         let span = end - start
-        for i in project.regions.indices where !ids.contains(project.regions[i].id) && project.regions[i].position >= end {
+        let tracks = Set(selected.map(\.trackId))
+        for i in project.regions.indices where !ids.contains(project.regions[i].id) && project.regions[i].position >= end
+            && tracks.contains(project.regions[i].trackId) {
             project.regions[i].position += span
         }
         var copies: [UUID] = []
@@ -188,12 +194,63 @@ public enum EditOperations {
         project.regions[i].name = name
     }
 
+    // MARK: Tracks
+
+    /// Moves `ids` by `lanes` tracks (positive is down), as a block: limited so every region stays on a track.
+    /// Only `trackId` changes. Returns the lanes applied.
+    @discardableResult
+    public static func moveToTrack(_ project: inout Project, ids: Set<UUID>, byLanes lanes: Int) -> Int {
+        let indices = project.regions.filter { ids.contains($0.id) }.compactMap { project.trackIndex($0.trackId) }
+        guard let lo = indices.min(), let hi = indices.max() else { return 0 }
+        let applied = min(max(lanes, -lo), project.tracks.count - 1 - hi)
+        guard applied != 0 else { return 0 }
+        for i in project.regions.indices where ids.contains(project.regions[i].id) {
+            if let t = project.trackIndex(project.regions[i].trackId) { project.regions[i].trackId = project.tracks[t + applied].id }
+        }
+        return applied
+    }
+
+    /// Adds an empty track at `index` (default: the end) with the next name and palette color. Returns its id.
+    @discardableResult
+    public static func addTrack(_ project: inout Project, at index: Int? = nil) -> UUID {
+        let track = Track(name: project.nextTrackName, color: project.nextTrackColor)
+        project.tracks.insert(track, at: min(max(index ?? project.tracks.count, 0), project.tracks.count))
+        return track.id
+    }
+
+    /// Removes a track and its regions. The last track cannot be removed.
+    public static func removeTrack(_ project: inout Project, id: UUID) {
+        guard project.tracks.count > 1, let i = project.trackIndex(id) else { return }
+        project.tracks.remove(at: i)
+        project.regions.removeAll { $0.trackId == id }
+    }
+
+    /// Moves a track to `index` in the final order.
+    public static func moveTrack(_ project: inout Project, id: UUID, to index: Int) {
+        guard let i = project.trackIndex(id) else { return }
+        let track = project.tracks.remove(at: i)
+        project.tracks.insert(track, at: min(max(index, 0), project.tracks.count))
+    }
+
+    public static func updateTrack(_ project: inout Project, id: UUID, _ change: (inout Track) -> Void) {
+        guard let i = project.trackIndex(id) else { return }
+        change(&project.tracks[i])
+        project.tracks[i].gainDB = min(max(project.tracks[i].gainDB, Track.silentDB), Track.maxGainDB)
+        project.tracks[i].pan = min(max(project.tracks[i].pan, -1), 1)
+        project.tracks[i].color = ((project.tracks[i].color % Track.paletteCount) + Track.paletteCount) % Track.paletteCount
+    }
+
+    public static func setMasterGain(_ project: inout Project, dB: Double) {
+        project.master.gainDB = min(max(dB, Track.silentDB), Track.maxGainDB)
+    }
+
     // MARK: Snapping
 
     /// Region edges and extra frames (the playhead) that a dragged edge can snap to, excluding `ids`.
-    public static func snapTargets(_ project: Project, excluding ids: Set<UUID>, extra: [Int64]) -> [Int64] {
+    /// With `tracks`, only regions on those tracks count.
+    public static func snapTargets(_ project: Project, excluding ids: Set<UUID>, extra: [Int64], tracks: Set<UUID>? = nil) -> [Int64] {
         var targets = extra
-        for r in project.regions where !ids.contains(r.id) {
+        for r in project.regions where !ids.contains(r.id) && (tracks == nil || tracks!.contains(r.trackId)) {
             targets.append(r.position)
             targets.append(r.end)
         }

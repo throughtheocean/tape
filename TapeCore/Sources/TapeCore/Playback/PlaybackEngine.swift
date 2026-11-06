@@ -18,6 +18,11 @@ public final class PlaybackEngine: @unchecked Sendable {
     public private(set) var isPlaying = false
     public private(set) var speed = 1
 
+    /// Track and master peaks of the audio as it is played.
+    public let meters = MeterQueue()
+    /// Render callbacks that ran short while audio was flowing in the same play generation.
+    public let underruns = AtomicInt64(0)
+
     private let engine = AVAudioEngine()
     private var sourceNode: AVAudioSourceNode?
     private var ring: ChunkRing?
@@ -308,6 +313,10 @@ public final class PlaybackEngine: @unchecked Sendable {
         let firstAudio = self.firstAudioHostTime
         let consumerOffset = AtomicInt64(0)
         let channels = ring.channelCount
+        let meters = self.meters
+        let underruns = self.underruns
+        let lastGeneration = AtomicInt64(-1)
+        let lastFull = AtomicInt64(0)
 
         return AVAudioSourceNode(format: format) { _, timestamp, frameCount, ablPointer -> OSStatus in
             let abl = UnsafeMutableAudioBufferListPointer(ablPointer)
@@ -327,6 +336,7 @@ public final class PlaybackEngine: @unchecked Sendable {
                     offset = 0
                     continue
                 }
+                if offset == 0 { meters.push(ring.meters + slot * MeterQueue.stride) }
                 if firstPosition == .min { firstPosition = header.startPosition + offset * header.speed }
                 lastSpeed = header.speed
                 let n = min(Int(header.frames - offset), total - out)
@@ -342,6 +352,9 @@ public final class PlaybackEngine: @unchecked Sendable {
                 }
             }
             consumerOffset.store(offset)
+            if out < total, lastFull.load() == 1, lastGeneration.load() == gen { _ = underruns.add(1) }
+            lastFull.store(out == total ? 1 : 0)
+            lastGeneration.store(gen)
             if out < total {
                 for c in 0..<abl.count {
                     guard let dst = abl[c].mData?.assumingMemoryBound(to: Float.self) else { continue }
@@ -364,6 +377,7 @@ public final class PlaybackEngine: @unchecked Sendable {
 
     private func producerLoop(ring: ChunkRing, stop: AtomicInt64) {
         let renderer = EditListRenderer(maxFrames: 8192)
+        renderer.metering = true
         let maxSpeed = 8
         let work = SampleBuffer(channelCount: ring.channelCount, capacity: ring.chunkFrames * maxSpeed)
         var myGeneration: Int64 = -1
@@ -450,6 +464,12 @@ public final class PlaybackEngine: @unchecked Sendable {
                     vDSP_desamp(src, vDSP_Stride(step), filter, dst, vDSP_Length(n), vDSP_Length(step))
                 }
                 if speed < 0 { vDSP_vrvrs(dst, 1, vDSP_Length(n)) }
+            }
+            let meterSlot = ring.meters + slot * MeterQueue.stride
+            meterSlot.update(repeating: 0, count: MeterQueue.stride)
+            for (i, peak) in renderer.trackPeaks.prefix(MeterQueue.maxTracks).enumerated() { meterSlot[i] = peak }
+            for (i, peak) in renderer.masterPeaks.prefix(MeterQueue.maxMasterChannels).enumerated() {
+                meterSlot[MeterQueue.maxTracks + i] = peak
             }
             ring.headers[slot] = ChunkRing.Header(generation: myGeneration, startPosition: pos, speed: speed, frames: outFrames)
             ring.writeIndex.store(w + 1)

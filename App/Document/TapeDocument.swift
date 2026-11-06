@@ -76,7 +76,7 @@ final class TapeDocument: ObservableObject {
 
     // MARK: Gestures
 
-    private var gestureBase: Project?
+    private(set) var gestureBase: Project?
 
     var isInGesture: Bool { gestureBase != nil }
 
@@ -148,7 +148,8 @@ final class TapeDocument: ObservableObject {
 
     // MARK: Import
 
-    func importAudio(_ urls: [URL]) throws {
+    /// Imports at the document end, onto `track` (default: the first track).
+    func importAudio(_ urls: [URL], track: UUID? = nil) throws {
         var refs: [SourceRef] = []
         for url in urls {
             let info = try AudioFileInfo(url: url)
@@ -164,11 +165,12 @@ final class TapeDocument: ObservableObject {
                 p.channelCount = refs[0].channelCount
             }
             let rate = p.sessionRate!
+            let trackId = track.flatMap { p.track($0)?.id } ?? p.tracks[0].id
             var position = p.length
             for ref in refs {
                 p.sources.append(ref)
                 let length = ref.sessionFrameCount(sessionRate: rate)
-                p.regions.append(Region(name: (ref.name as NSString).deletingPathExtension, sourceId: ref.id,
+                p.regions.append(Region(name: (ref.name as NSString).deletingPathExtension, trackId: trackId, sourceId: ref.id,
                                         sourceIn: 0, sourceOut: length, position: position))
                 position += length
             }
@@ -180,7 +182,7 @@ final class TapeDocument: ObservableObject {
     /// Adds a finished recording from `sources/` as a region starting at `position`.
     /// Returns the timeline frame where R was pressed, after the pre-roll head.
     @discardableResult
-    func addRecording(fileName: String, result: RecordEngine.Recording, at position: Int64) -> Int64 {
+    func addRecording(fileName: String, result: RecordEngine.Recording, at position: Int64, track: UUID) -> Int64 {
         let ref = SourceRef(name: fileName, location: .package(fileName: fileName), sampleRate: result.sampleRate,
                             channelCount: result.channelCount, frameCount: result.frames, preRollFrames: result.preRollFrames)
         var livePoint = position
@@ -191,7 +193,8 @@ final class TapeDocument: ObservableObject {
             }
             let rate = p.sessionRate!
             p.sources.append(ref)
-            p.regions.append(Region(name: (fileName as NSString).deletingPathExtension, sourceId: ref.id, sourceIn: 0,
+            let trackId = p.track(track)?.id ?? p.tracks[0].id
+            p.regions.append(Region(name: (fileName as NSString).deletingPathExtension, trackId: trackId, sourceId: ref.id, sourceIn: 0,
                                     sourceOut: ref.sessionFrameCount(sessionRate: rate), position: position))
             livePoint = position + ref.sessionPreRoll(sessionRate: rate)
         }
@@ -350,8 +353,7 @@ final class TapeDocument: ObservableObject {
     func editList() -> EditList {
         var sources: [UUID: SampleSource] = [:]
         for (id, s) in loaded { sources[id] = s.source }
-        return EditList(regions: project.regions.filter { sources[$0.sourceId] != nil },
-                        sources: sources, channelCount: project.channelCount)
+        return EditList(project: project, sources: sources)
     }
 
     var sessionRate: Double { project.sessionRate ?? 48000 }

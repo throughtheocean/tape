@@ -569,3 +569,141 @@ Maik's layout request after M5: the inspector moves to a left sidebar that slide
 1. The divider between the top area and the timeline is gone, because the transport now has a fixed height. The timeline always gets the rest.
 2. On a fresh install the inspector starts hidden, since it now slides in when needed. An existing setting is kept.
 3. The title bar button sits next to the window buttons rather than inside the transport bar, which keeps the transport row as it was.
+
+## M6: Multitrack
+
+Spec: `docs/261106-tape-m6-multitrack-cursor-prompt-01.md`. It says it extends `docs/261105-tape-cursor-prompt-01.md`. That file does not exist in the repository, so I worked from the original M1 to M5 spec, whose rules are the same.
+
+### What was built
+
+TapeCore:
+
+- Model, `project.json` version 2:
+  - `Track {id, name, color, gainDB, pan, mute, solo}` with its regions nested in `tracks[].regions`, plus `master {gainDB}`.
+  - In memory, regions stay in one flat list, and each region carries a `trackId`. Moving a region between tracks changes only `trackId`.
+  - A version 1 file loads as one track named "Track 1". Saving always writes version 2.
+  - -inf gain is stored as -120 dB, because JSON has no infinity.
+- Mix (`EditListRenderer`, the same path for playback and export):
+  - Each track renders into its own buffer.
+  - Track gain and pan apply, then the tracks are summed, then master gain applies.
+  - Pan law: constant power, -3 dB at centre, for mono regions. Stereo regions are balanced: the far side follows a quarter cosine, and the near side stays at unity.
+  - Mute silences its track. Solo silences every track that is not soloed.
+  - Inaudible tracks are not rendered at all.
+- Meters:
+  - The producer measures peaks per track (post gain and pan) and per master channel for every ring slot.
+  - The audio callback publishes a slot's peaks when it starts playing that slot. This ties the meters to what is heard, not to what was rendered ahead.
+  - The UI drains the peaks at display rate. Ballistics: 1.5 s peak hold, a fall of 24 dB per second, and a latched clip indicator (click the meter to reset it).
+- Edits:
+  - Ripple delete and duplicate work per track.
+  - New operations: move between tracks by lanes, add track, remove track, reorder track, update track (clamped), and master gain.
+  - Snapping only looks at regions on the visible tracks.
+- Export:
+  - The "Document" scope is now "Mix".
+  - New "Stems" scope: one file per track, post gain and pan, without master gain. Muted tracks write no file, solo is ignored, and every stem spans the whole document from 0, so stems line up.
+  - Stems have their own pattern, default `{name}-{track}`.
+  - Presets apply to each stem.
+  - Patterns gain a `{track}` token, which also works for Each Region.
+- `PlaybackEngine.underruns` counts render callbacks that ran short while audio was flowing. It is used by the benchmark.
+
+Tape.app:
+
+- View switching:
+  - A "Single · Multi" segmented control in the transport bar, and View > Multitrack (Shift Cmd M).
+  - Next to it, a track popup selects the track the single view shows. It is disabled while there is one track.
+  - The view, selected track, lane height, expand state and vertical scroll are saved per document. Switching views keeps playhead, zoom and horizontal scroll.
+- Single view: the selected track at full height, no headers. With one track it looks and behaves as in M5. The M3, M4, M5 and M5 layout scripts give the same logs as the M5 build, apart from the renamed scope and live playhead values.
+- Multitrack view:
+  - A 180 pt header column on the left, then lanes that scroll vertically when they do not fit.
+  - Per track header: color swatch (click for the 8 color menu), name (double click renames), M and S, gain slider with dB readout (-inf to +12, cube root fader law, double click resets to 0), pan slider with L/C/R readout (double click resets), and a thin peak meter on the right edge.
+  - A slider drag is one undo step.
+  - At the bottom, the master strip: a "+" button (add track), master gain, and a stereo meter.
+- Tracks:
+  - Track > Add Track (Cmd T) inserts a track under the selected one. Colors come from the palette of 8 in order.
+  - Click a header to select the track. Delete then removes it, and asks first if it has regions.
+  - Drag a header to reorder; a line shows the drop position.
+- Lanes:
+  - Lane height S, M or L (40, 80, 160 pt) with a new button in the right tool bar, or Track > Lane Height.
+  - An expand toggle (tool bar, or Track > Expand Selected Track) gives the selected lane the remaining height.
+- Regions:
+  - Regions are tinted by their track's color. Color 0 is the accent color, so a one track document looks as before.
+  - Dragging a region vertically moves it between lanes, snapping to lanes, in the same undo step as the horizontal move.
+  - Every M3 key and gesture works on any lane.
+  - The rubber band selects across the lanes it covers. A range spans all tracks, and Cmd B blades every track at the range edges or the playhead.
+- Recording goes to the selected track (the first when none is selected). Placement inside a region looks at that track only. Imports go to the document end on the selected track.
+- Inspector: when a header is selected, a Track section shows name, color, gain, pan, mute, solo and region count.
+
+### Measured numbers
+
+Release build, 3 hour 48 kHz stereo source, 8 tracks with a 2 hour region each, `scripts/benchmark.sh /tmp/tape-perf-3.0h.wav 8`. The screen was locked, so display links did not run and presented frame rate could not be measured (see Open). Instead:
+
+| Measurement | Result |
+| --- | --- |
+| Toggle Single and Multi, main thread work (layout, headers, labels, no GPU), 240 toggles | p50 0.14 ms, p99 0.79 ms, max 1.34 ms |
+| Region dragged through all 8 lanes and back on a 120 Hz timer while playing, 4 s, 23 lane changes | 0 underruns, playback advanced 191,488 frames (3.99 s) |
+| One drag step (edit plus header refresh) | p50 0.11 ms, p99 0.31 ms |
+
+A frame at 120 Hz has 8.3 ms, so the CPU part of a toggle is far inside it.
+
+### Tests
+
+13 new tests in `MultitrackTests`, all green (96 in total, 5 opt-in skipped):
+
+- Pan law: constant power for mono (-3.01 dB at centre, hard left and right), and balance for stereo.
+- Sum of two tracks with gain and pan, then master gain.
+- Mute, solo, and -inf gain.
+- Stems equal the per track render, and the stems summed through the master equal the mix.
+- `{track}` token and duplicate names.
+- A region moved between tracks keeps every field except `trackId`.
+- Track add, remove (the last track stays) and reorder.
+- Per track ripple delete.
+- Version 2 round trip.
+- Migration: three version 1 packages saved by the M5 build (`Fixtures/m5-*.tape`: stereo, mono, mixed mono in stereo) play sample identical to renders stored by M5 and save as version 2. The mixed fixture's mono region is the documented exception, see Deviations.
+- Meter: a -6 dBFS sine through the engine reads -6.0 ±0.1, and the hold, fall and clip ballistics.
+
+`DocumentTests` now expect version 2, and the export tests use the Mix scope.
+
+### Tested by hand
+
+The screen was locked, so I used the harness again. New script `scripts/selftest/m6-multitrack.txt` (sources: a 4 s stereo 1 kHz sine at -6 dBFS and a 3 s mono 440 Hz sine at -12 dBFS, generated as `/tmp/tape-m6-a.wav` and `/tmp/tape-m6-b.wav`):
+
+- Shift Cmd M switches to the multitrack view. Cmd T adds tracks, which become selected, and an import lands on the selected track.
+- A region dragged from lane 2 down to lane 4 moves to track 4 and back with one undo step.
+- Header controls each make one undo step: M, S, gain drag, double click reset, pan drag to L50, master gain and its reset.
+- While playing, the meters read track 1 at -6.0 dB hold and the master at -6.0 dB on both channels.
+- Dragging the header of track 4 above track 1 reorders it, and undo restores the order.
+- Lane height 40, 80 and 160 and the expand toggle give the expected lane geometry.
+- A rubber band from empty space on lane 1 down to lane 4 selects regions on both. A range across lanes 1 and 4 with Cmd B blades both tracks at its edges.
+- Delete on a track with regions shows "Remove Track 4?" (cancelled), and on an empty track removes it at once. Undo brings it back.
+- Stems with track 1 at -6 dB, track 4 panned L50 and the empty track 2 muted: 3 files (track 2 skipped), each equal to its track rendered alone (maximum difference 0). The mix export equals the render.
+- Back in the single view, the selected track shows full height and the popup names it.
+
+New script `scripts/selftest/m6-record.txt`: with 4 tracks and track 3 selected, R records with 1 s pre-roll from the MacBook Pro Microphone. The take lands on track 3 at the playhead, and undo removes it.
+
+The M3, M4, M5 export and M5 layout scripts were run with both the M5 build and this build, and their logs compared. They are identical apart from the scope's new name and live playhead values during playback.
+
+Checklist from the spec:
+
+| Item | Status |
+| --- | --- |
+| Toggle at 120 Hz on a 2 hour document with 8 tracks | Partly. CPU cost measured (above); presented frame pacing needs an unlocked screen. Run `scripts/benchmark.sh /tmp/tape-perf-3.0h.wav 8` and click the window. |
+| Drag a region across lanes while playing, no dropout | Done in the benchmark: 0 underruns while dragging through 8 lanes. Listening for clicks needs Maik. |
+| Record onto track 3 with pre-roll | Placement done (take on track 3). The audio itself was not checked: with the screen locked, the microphone delivered 0 to 0.2 s per 2 s take, with the M5 build as well, so this is not an M6 change. |
+| A 4-track stems export opened in Logic lines up to the sample | Not done (Logic needs Maik). Every stem starts at frame 0 and has the document's length, and each equals its track's render exactly. |
+
+### Open
+
+- Look at the multitrack view in the real window: the offscreen snapshot shows the timeline, headers and tool bar (`/tmp/tape-m6-four.png`), but not the SwiftUI parts (transport toggle styling, track popup, inspector Track section).
+- The three checklist items above that need the unlocked screen, a microphone, or Logic.
+
+### Deviations and findings, with reasons
+
+1. Pan law and "a v2 file with one track behaves exactly like today": these two contradict each other for mono regions in a stereo session. M5 copied a mono region to both channels at unity. The -3 dB centre the spec asks for makes such a region 3.01 dB quieter (×0.7071). Stereo regions, mono sessions and stereo sessions with only stereo regions are unchanged (sample identical, tested). I followed the explicit pan law.
+   - Proposal: a pan law setting on the document (-3 dB, the default for new documents, or 0 dB centre), with migrated version 1 documents set to 0 dB. That keeps old documents as they were.
+   - Another option is to apply the law only when the pan is off centre, but that makes the first pan move jump by 3 dB.
+2. Stems are post track gain and pan but before master gain, so the files are what each track contributes. Summed through the master again, they equal the mix (tested).
+3. Selections and Each Region exports keep track gain, pan and master, but play even when their track is muted or another track is soloed. Exporting something that comes out silent would be surprising.
+4. The default stem name is `{name}-{track}`, not `{document}-{track}`, because `{name}` is the existing token for the document name. `{document}` is not a token.
+5. Track color 0 is the app accent color, not a fixed color, so a one track document looks as in M5.
+6. The pan control is a small slider, not a knob (the spec allows either).
+7. In the multitrack view, a plain vertical scroll scrolls the lanes when they do not fit; otherwise it pans in time as before. Shift scroll (horizontal deltas) always pans.
+8. Nothing from "Not in M6" was needed.

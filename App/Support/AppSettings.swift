@@ -105,6 +105,11 @@ final class AppSettings: ObservableObject {
         set { defaults.set(newValue, forKey: "exportPattern") }
     }
 
+    var stemPattern: String {
+        get { defaults.string(forKey: "stemPattern") ?? Exporter.defaultStemPattern }
+        set { defaults.set(newValue, forKey: "stemPattern") }
+    }
+
     /// Id of the last chosen hardware preset; nil for none.
     var exportPresetID: String? {
         get { defaults.string(forKey: "exportPresetID") }

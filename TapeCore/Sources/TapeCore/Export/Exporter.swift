@@ -96,12 +96,16 @@ public struct ExportSettings: Codable, Equatable, Hashable, Sendable {
 
 /// What to export.
 public enum ExportScope: Equatable, Sendable {
-    case document
+    /// The whole document through the master.
+    case mix
     case range(SampleRange)
     /// The selected regions alone, as one file over their span.
     case selection([UUID])
     /// Each region alone, as its own file, in timeline order.
     case eachRegion([UUID])
+    /// One file per track, post track gain and pan, before the master; mute respected (no file), solo ignored.
+    /// Every stem spans the whole document from frame 0.
+    case stems([UUID])
 }
 
 /// One output file (or one set of split files): an edit list and the timeline span to render.
@@ -129,12 +133,13 @@ public struct ExportJob: Sendable {
 
 public enum Exporter {
     public static let defaultPattern = "{name}-{index:02}"
+    public static let defaultStemPattern = "{name}-{track}"
 
     // MARK: Naming
 
-    /// Expands `{name}`, `{region}`, `{date}`, `{index}` and `{index:NN}` (zero padded to NN digits).
+    /// Expands `{name}`, `{region}`, `{track}`, `{date}`, `{index}` and `{index:NN}` (zero padded to NN digits).
     /// Unknown tokens stay as typed. Slashes and colons become dashes.
-    public static func fileName(pattern: String, name: String, index: Int, region: String, date: Date) -> String {
+    public static func fileName(pattern: String, name: String, index: Int, region: String, track: String = "", date: Date) -> String {
         var out = ""
         var rest = Substring(pattern)
         while let open = rest.firstIndex(of: "{") {
@@ -144,7 +149,7 @@ public enum Exporter {
                 break
             }
             let token = rest[rest.index(after: open)..<close]
-            out += expand(token, name: name, index: index, region: region, date: date) ?? String(rest[open...close])
+            out += expand(token, name: name, index: index, region: region, track: track, date: date) ?? String(rest[open...close])
             rest = rest[rest.index(after: close)...]
         }
         out += rest
@@ -152,11 +157,12 @@ public enum Exporter {
         return clean.trimmingCharacters(in: .whitespaces).isEmpty ? "Untitled" : clean
     }
 
-    private static func expand(_ token: Substring, name: String, index: Int, region: String, date: Date) -> String? {
+    private static func expand(_ token: Substring, name: String, index: Int, region: String, track: String, date: Date) -> String? {
         let parts = token.split(separator: ":", maxSplits: 1)
         switch parts.first.map(String.init) {
         case "name": return name
         case "region": return region
+        case "track": return track
         case "date":
             let f = DateFormatter()
             f.locale = Locale(identifier: "en_US_POSIX")
@@ -172,10 +178,12 @@ public enum Exporter {
 
     // MARK: Jobs
 
-    /// The files a scope produces. `fileName` names single-file scopes; `eachRegion` uses `pattern`.
-    /// Duplicate names get " 2", " 3" appended.
+    /// The files a scope produces. `fileName` names single-file scopes; `eachRegion` and `stems` use `pattern`.
+    /// `trackNames` fills `{track}`. Duplicate names get " 2", " 3" appended.
+    /// Selections and single regions keep their track's gain and pan and the master, but play even when muted.
     public static func jobs(list: EditList, scope: ExportScope, directory: URL, fileName: String, pattern: String,
-                            documentName: String, date: Date, settings: ExportSettings) -> [ExportJob] {
+                            documentName: String, date: Date, settings: ExportSettings,
+                            trackNames: [UUID: String] = [:]) -> [ExportJob] {
         let ext = settings.fileExtension
         func url(_ base: String) -> URL {
             let clean = base.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
@@ -186,10 +194,26 @@ public enum Exporter {
             return list.regions.filter { set.contains($0.id) }.sorted { $0.position < $1.position }
         }
         func sub(_ regions: [Region]) -> EditList {
-            EditList(regions: regions, sources: list.sources, channelCount: list.channelCount)
+            var l = list.with(regions: regions)
+            for i in l.tracks.indices {
+                l.tracks[i].mute = false
+                l.tracks[i].solo = false
+            }
+            return l
+        }
+        var used = Set<String>()
+        func unique(_ base: String) -> String {
+            var name = base
+            var n = 2
+            while used.contains(name.lowercased()) {
+                name = "\(base) \(n)"
+                n += 1
+            }
+            used.insert(name.lowercased())
+            return name
         }
         switch scope {
-        case .document:
+        case .mix:
             return [ExportJob(list: list, span: SampleRange(start: 0, end: list.length), url: url(fileName))]
         case let .range(r):
             return [ExportJob(list: list, span: r, url: url(fileName))]
@@ -198,17 +222,18 @@ public enum Exporter {
             guard let start = regions.map(\.position).min(), let end = regions.map(\.end).max() else { return [] }
             return [ExportJob(list: sub(regions), span: SampleRange(start: start, end: end), url: url(fileName))]
         case let .eachRegion(ids):
-            var used = Set<String>()
             return only(ids).enumerated().map { i, r in
-                let base = Self.fileName(pattern: pattern, name: documentName, index: i + 1, region: r.name, date: date)
-                var name = base
-                var n = 2
-                while used.contains(name.lowercased()) {
-                    name = "\(base) \(n)"
-                    n += 1
-                }
-                used.insert(name.lowercased())
-                return ExportJob(list: sub([r]), span: r.timelineRange, url: url(name))
+                let base = Self.fileName(pattern: pattern, name: documentName, index: i + 1, region: r.name,
+                                         track: trackNames[r.trackId] ?? "", date: date)
+                return ExportJob(list: sub([r]), span: r.timelineRange, url: url(unique(base)))
+            }
+        case let .stems(ids):
+            let span = SampleRange(start: 0, end: list.length)
+            let wanted = Set(ids)
+            return list.tracks.filter { wanted.contains($0.id) && !$0.mute }.enumerated().map { i, t in
+                let base = Self.fileName(pattern: pattern, name: documentName, index: i + 1, region: "",
+                                         track: trackNames[t.id] ?? "", date: date)
+                return ExportJob(list: list.stem(t.id), span: span, url: url(unique(base)))
             }
         }
     }

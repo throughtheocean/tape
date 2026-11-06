@@ -4,19 +4,20 @@ import HardwarePresets
 import TapeCore
 
 enum ExportScopeKind: String, CaseIterable, Identifiable {
-    case document, range, selection, eachRegion
+    case mix, range, selection, eachRegion, stems
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .document: return "Whole document"
+        case .mix: return "Mix"
         case .range: return "Range"
         case .selection: return "Selected regions as one file"
         case .eachRegion: return "Each region as its own file"
+        case .stems: return "Stems, one file per track"
         }
     }
 
-    var writesFolder: Bool { self == .eachRegion }
+    var writesFolder: Bool { self == .eachRegion || self == .stems }
 }
 
 /// State of the export sheet: format, scope, naming, hardware preset, and the running export.
@@ -29,6 +30,7 @@ final class ExportSession: ObservableObject {
     @Published var settings: ExportSettings
     @Published var scope: ExportScopeKind
     @Published var pattern: String
+    @Published var stemPattern: String
     @Published private(set) var preset: ExportPreset?
     @Published private(set) var isExporting = false
     @Published private(set) var progress: Double = 0
@@ -42,24 +44,26 @@ final class ExportSession: ObservableObject {
         let s = AppSettings.shared
         settings = s.exportSettings
         pattern = s.exportPattern
-        self.scope = .document
+        stemPattern = s.stemPattern
+        self.scope = .mix
         if let onlyRegion {
             self.scope = .selection
             editor.selection = [onlyRegion]
         } else if let scope, availableScopes.contains(scope) {
             self.scope = scope
         } else {
-            self.scope = editor.range != nil ? .range : .document
+            self.scope = editor.range != nil ? .range : .mix
         }
         if let id = s.exportPresetID, let p = ExportPreset.preset(for: id) { applyPreset(p) }
     }
 
     var availableScopes: [ExportScopeKind] {
         if onlyRegion != nil { return [.selection] }
-        var scopes: [ExportScopeKind] = [.document]
+        var scopes: [ExportScopeKind] = [.mix]
         if editor.range != nil { scopes.append(.range) }
         if !editor.selection.isEmpty { scopes.append(.selection) }
         if !editor.project.regions.isEmpty { scopes.append(.eachRegion) }
+        scopes.append(.stems)
         return scopes
     }
 
@@ -76,10 +80,11 @@ final class ExportSession: ObservableObject {
 
     var coreScope: ExportScope {
         switch scope {
-        case .document: return .document
+        case .mix: return .mix
         case .range: return .range(editor.range ?? SampleRange(start: 0, end: 0))
         case .selection: return .selection(regionIDs)
         case .eachRegion: return .eachRegion(regionIDs)
+        case .stems: return .stems(editor.project.tracks.map(\.id))
         }
     }
 
@@ -93,8 +98,10 @@ final class ExportSession: ObservableObject {
     }
 
     func jobs(directory: URL, fileName: String) -> [ExportJob] {
-        Exporter.jobs(list: editor.document.editList(), scope: coreScope, directory: directory, fileName: fileName,
-                      pattern: pattern, documentName: documentName, date: Date(), settings: settings)
+        let names = Dictionary(editor.project.tracks.map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a })
+        return Exporter.jobs(list: editor.document.editList(), scope: coreScope, directory: directory, fileName: fileName,
+                             pattern: scope == .stems ? stemPattern : pattern, documentName: documentName, date: Date(),
+                             settings: settings, trackNames: names)
     }
 
     /// What the export would write, for the summary line and the preset limits.
@@ -122,11 +129,17 @@ final class ExportSession: ObservableObject {
 
     /// Choosing a preset sets and locks its fields; None unlocks them as they are and brings back the user's pattern.
     func applyPreset(_ p: ExportPreset?) {
-        if isPatternLocked { pattern = AppSettings.shared.exportPattern }
+        if isPatternLocked {
+            pattern = AppSettings.shared.exportPattern
+            stemPattern = AppSettings.shared.stemPattern
+        }
         preset = p
         if let p {
             settings = ExportSettings(preset: p)
-            if let name = p.limits.namePattern { pattern = name }
+            if let name = p.limits.namePattern {
+                pattern = name
+                stemPattern = name
+            }
         }
     }
 
@@ -150,7 +163,7 @@ final class ExportSession: ObservableObject {
             panel.canChooseFiles = false
             panel.canCreateDirectories = true
             panel.prompt = "Export"
-            panel.message = "Choose a folder for the region files."
+            panel.message = scope == .stems ? "Choose a folder for the stems." : "Choose a folder for the region files."
             panel.beginSheetModal(for: window) { response in
                 MainActor.assumeIsolated {
                     guard response == .OK, let url = panel.url else { return }
@@ -176,6 +189,7 @@ final class ExportSession: ObservableObject {
         let s = AppSettings.shared
         s.exportSettings = settings
         s.exportPattern = isPatternLocked ? s.exportPattern : pattern
+        s.stemPattern = isPatternLocked ? s.stemPattern : stemPattern
         s.exportPresetID = preset?.id
         let jobs = jobs(directory: directory, fileName: fileName)
         let settings = settings

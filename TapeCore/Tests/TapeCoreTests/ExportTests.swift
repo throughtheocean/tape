@@ -35,7 +35,7 @@ final class ExportTests: XCTestCase {
         return out.toArrays(count: Int(span.length))
     }
 
-    func export(_ list: EditList, _ settings: ExportSettings, scope: ExportScope = .document, name: String = "out") throws -> [URL] {
+    func export(_ list: EditList, _ settings: ExportSettings, scope: ExportScope = .mix, name: String = "out") throws -> [URL] {
         let jobs = Exporter.jobs(list: list, scope: scope, directory: dir, fileName: name, pattern: Exporter.defaultPattern,
                                  documentName: "Tape", date: Date(), settings: settings)
         return try Exporter.export(jobs, sessionRate: rate, settings: settings)

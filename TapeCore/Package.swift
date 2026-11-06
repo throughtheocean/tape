@@ -14,6 +14,7 @@ let package = Package(
         .target(name: "TapeAtomics"),
         .target(name: "HardwarePresets", swiftSettings: strict),
         .target(name: "TapeCore", dependencies: ["TapeAtomics", "HardwarePresets"], swiftSettings: strict),
-        .testTarget(name: "TapeCoreTests", dependencies: ["TapeCore", "HardwarePresets"], swiftSettings: strict),
+        .testTarget(name: "TapeCoreTests", dependencies: ["TapeCore", "HardwarePresets"], resources: [.copy("Fixtures")],
+                    swiftSettings: strict),
     ]
 )

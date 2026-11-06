@@ -1,0 +1,79 @@
+{
+  "document" : {
+    "channelCount" : 2,
+    "regions" : [
+      {
+        "fadeIn" : {
+          "blend" : 0.4,
+          "length" : 2000,
+          "shape" : "sCurve"
+        },
+        "fadeOut" : {
+          "blend" : 0,
+          "length" : 0,
+          "shape" : "linear"
+        },
+        "gainDB" : 0,
+        "id" : "73DC7A75-F897-4286-B493-9B989575EE9E",
+        "name" : "stereo",
+        "position" : 0,
+        "sourceId" : "17F92A40-D135-4CBE-BC92-BDACA28CC4E5",
+        "sourceIn" : 0,
+        "sourceOut" : 12000
+      },
+      {
+        "fadeIn" : {
+          "blend" : 0,
+          "length" : 0,
+          "shape" : "linear"
+        },
+        "fadeOut" : {
+          "blend" : 0.25,
+          "length" : 3000,
+          "shape" : "log"
+        },
+        "gainDB" : -1,
+        "id" : "D2C80AAA-1174-4D09-964C-684603E10A80",
+        "name" : "mono",
+        "position" : 14000,
+        "sourceId" : "34CE80E1-EB2C-42BA-BAA8-93653D1117D4",
+        "sourceIn" : 0,
+        "sourceOut" : 12000
+      }
+    ],
+    "sessionRate" : 48000,
+    "sources" : [
+      {
+        "channelCount" : 2,
+        "frameCount" : 12000,
+        "id" : "17F92A40-D135-4CBE-BC92-BDACA28CC4E5",
+        "location" : {
+          "package" : {
+            "fileName" : "src1.caf"
+          }
+        },
+        "name" : "src1.caf",
+        "sampleRate" : 48000
+      },
+      {
+        "channelCount" : 1,
+        "frameCount" : 12000,
+        "id" : "34CE80E1-EB2C-42BA-BAA8-93653D1117D4",
+        "location" : {
+          "package" : {
+            "fileName" : "src2.caf"
+          }
+        },
+        "name" : "src2.caf",
+        "sampleRate" : 48000
+      }
+    ]
+  },
+  "version" : 1,
+  "view" : {
+    "amplitudeZoom" : 1,
+    "loopEnabled" : false,
+    "playhead" : 0,
+    "viewStart" : 0
+  }
+}

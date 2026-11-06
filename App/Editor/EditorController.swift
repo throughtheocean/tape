@@ -47,6 +47,8 @@ final class EditorController: ObservableObject {
     var recordingSpan: SampleRange? {
         didSet { if oldValue != recordingSpan { needsDisplay?() } }
     }
+    /// Track the recording in progress goes to.
+    var recordingTrack: UUID?
 
     enum Tool { case select, blade }
     @Published var tool: Tool = .select {
@@ -59,12 +61,17 @@ final class EditorController: ObservableObject {
         var hoverEdge: (id: UUID, start: Bool)?
         var bladeFrame: Int64?
         var rubberBand: SampleRange?
+        /// Vertical extent of the rubber band in the multitrack view.
+        var rubberTop: Double?
+        var rubberBottom: Double?
         var hint: String?
         var hintX: Double = 0
+        var hintY: Double?
 
         static func == (a: PointerOverlay, b: PointerOverlay) -> Bool {
             a.hoverRegion == b.hoverRegion && a.hoverEdge?.id == b.hoverEdge?.id && a.hoverEdge?.start == b.hoverEdge?.start
-                && a.bladeFrame == b.bladeFrame && a.rubberBand == b.rubberBand && a.hint == b.hint && a.hintX == b.hintX
+                && a.bladeFrame == b.bladeFrame && a.rubberBand == b.rubberBand && a.rubberTop == b.rubberTop
+                && a.rubberBottom == b.rubberBottom && a.hint == b.hint && a.hintX == b.hintX && a.hintY == b.hintY
         }
     }
     var pointer = PointerOverlay() {
@@ -72,6 +79,41 @@ final class EditorController: ObservableObject {
     }
     /// Fires when a double click asks the inspector to focus the region name.
     let focusRegionName = PassthroughSubject<Void, Never>()
+
+    // MARK: Tracks
+
+    /// Multitrack view (lanes with headers) instead of the single track view.
+    @Published var multitrack: Bool {
+        didSet {
+            guard oldValue != multitrack else { return }
+            layoutChanged()
+            revealSelectedLane()
+        }
+    }
+    /// The track the single view shows, recordings go to and the inspector's Track section edits.
+    @Published var selectedTrackID: UUID
+    /// A track header is selected: Delete removes the track and the inspector shows the track.
+    @Published var headerFocused = false {
+        didSet { if oldValue != headerFocused { needsDisplay?() } }
+    }
+    @Published var laneHeight: Double {
+        didSet { if oldValue != laneHeight { layoutChanged() } }
+    }
+    @Published var expandSelected: Bool {
+        didSet { if oldValue != expandSelected { layoutChanged() } }
+    }
+    /// Vertical scroll of the lanes in the multitrack view, points.
+    var laneScroll: Double = 0
+    /// Height of the Metal timeline in points, set by the timeline view.
+    var timelineHeight: Double = 600 {
+        didSet { if oldValue != timelineHeight { layoutChanged() } }
+    }
+    /// Bumped whenever lane geometry changes, so cached waveforms rebuild.
+    private(set) var layoutVersion = 0
+    func bumpLayout() { layoutVersion += 1 }
+    /// Meter state per track id, and the master channels.
+    var trackMeters: [UUID: MeterBallistics] = [:]
+    var masterMeters: [MeterBallistics] = [MeterBallistics(), MeterBallistics()]
 
     static let minSamplesPerPoint = 1.0 / 32
     private var subscriptions: Set<AnyCancellable> = []
@@ -88,6 +130,11 @@ final class EditorController: ObservableObject {
         loopEnabled = v.loopEnabled
         playhead = v.playhead
         clock.position = playhead
+        multitrack = v.multitrack
+        selectedTrackID = v.selectedTrack.flatMap { document.project.track($0)?.id } ?? document.project.tracks[0].id
+        laneHeight = Self.laneHeights.contains(v.laneHeight) ? v.laneHeight : 80
+        expandSelected = v.expandSelected
+        laneScroll = v.laneScroll
 
         document.$revision
             .sink { [weak self] _ in
@@ -102,6 +149,11 @@ final class EditorController: ObservableObject {
     // MARK: Document sync
 
     private func documentChanged() {
+        if document.project.track(selectedTrackID) == nil {
+            selectedTrackID = document.project.tracks[0].id
+            headerFocused = false
+        }
+        layoutVersion += 1
         configureEngineIfNeeded()
         playback.setEditList(document.editList())
         updateLoop()
@@ -124,7 +176,7 @@ final class EditorController: ObservableObject {
         }
     }
 
-    private func saveView() {
+    func saveView() {
         var v = document.view
         v.playhead = playhead
         v.range = range
@@ -132,6 +184,11 @@ final class EditorController: ObservableObject {
         v.viewStart = viewStart
         v.samplesPerPoint = samplesPerPoint > 0 ? samplesPerPoint : nil
         v.amplitudeZoom = amplitudeZoom
+        v.multitrack = multitrack
+        v.selectedTrack = selectedTrackID
+        v.laneHeight = laneHeight
+        v.expandSelected = expandSelected
+        v.laneScroll = laneScroll
         guard v != document.view else { return }
         document.view = v
         document.scheduleSave()

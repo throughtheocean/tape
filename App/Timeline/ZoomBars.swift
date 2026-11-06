@@ -193,6 +193,43 @@ final class SymbolToolButton: NSView {
     }
 }
 
+/// Button showing a short text that changes with state, used for the lane height.
+@MainActor
+final class TextToolButton: NSView {
+    var label: () -> String = { "" }
+    var action: () -> Void = {}
+    private var drawnLabel: String?
+
+    init(toolTip: String) {
+        super.init(frame: .zero)
+        self.toolTip = toolTip
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    override var isFlipped: Bool { true }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    func refreshIfChanged() {
+        if drawnLabel != label() { needsDisplay = true }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let text = label()
+        drawnLabel = text
+        let box = bounds.insetBy(dx: 1, dy: 2)
+        NSColor(white: 1, alpha: 0.06).setFill()
+        NSBezierPath(roundedRect: box, xRadius: 4, yRadius: 4).fill()
+        HeaderDrawing.text(text, in: box, size: 11, color: Theme.secondaryText, align: .center, weight: .semibold, mono: false)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        action()
+        needsDisplay = true
+    }
+}
+
 /// Strip under the minimap with the horizontal zoom, right aligned.
 @MainActor
 final class TimelineToolStrip: NSView {
@@ -236,10 +273,20 @@ final class TimelineSideBar: NSView {
     let select = SymbolToolButton(symbol: "cursorarrow", toolTip: "Select tool (A)")
     let blade = SymbolToolButton(symbol: "scissors", toolTip: "Blade tool (B). Click a region to cut it. A returns to the select tool.")
     let snap = SnapToZeroButton(frame: .zero)
+    let laneSize = TextToolButton(toolTip: "Lane height in the multitrack view: 40, 80 or 160 points")
+    let expand = SymbolToolButton(symbol: "arrow.up.and.down", toolTip: "Expand the selected track")
+    /// Lane buttons only show in the multitrack view.
+    var showsLaneTools = false {
+        didSet { if oldValue != showsLaneTools { needsLayout = true; needsDisplay = true } }
+    }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        for v in [amplitudeBar, select, blade, snap] as [NSView] { addSubview(v) }
+        for v in [amplitudeBar, select, blade, snap, laneSize, expand] as [NSView] { addSubview(v) }
+    }
+
+    private var zoomHeight: CGFloat {
+        min(Self.zoomHeight, max(60, bounds.height - (showsLaneTools ? 170 : 110)))
     }
 
     @available(*, unavailable)
@@ -250,10 +297,12 @@ final class TimelineSideBar: NSView {
     override func layout() {
         super.layout()
         let w = bounds.width
-        let zoom = min(Self.zoomHeight, max(60, bounds.height - 110))
+        let zoom = zoomHeight
         amplitudeBar.frame = NSRect(x: 0, y: 0, width: w, height: zoom)
         var y = zoom + 9
-        for button in [select, blade, snap] as [NSView] {
+        laneSize.isHidden = !showsLaneTools
+        expand.isHidden = !showsLaneTools
+        for button in [select, blade, snap, laneSize, expand] as [NSView] where !button.isHidden {
             button.frame = NSRect(x: 2, y: y, width: w - 4, height: 28)
             y += 30
         }
@@ -264,7 +313,7 @@ final class TimelineSideBar: NSView {
         bounds.fill()
         Theme.separator.setFill()
         NSRect(x: 0, y: 0, width: 1, height: bounds.height).fill()
-        NSRect(x: 6, y: min(Self.zoomHeight, max(60, bounds.height - 110)) + 4, width: bounds.width - 12, height: 1).fill()
+        NSRect(x: 6, y: zoomHeight + 4, width: bounds.width - 12, height: 1).fill()
     }
 
     func refresh() {
@@ -272,5 +321,7 @@ final class TimelineSideBar: NSView {
         select.refreshIfChanged()
         blade.refreshIfChanged()
         snap.refreshIfChanged()
+        laneSize.refreshIfChanged()
+        expand.refreshIfChanged()
     }
 }

@@ -68,7 +68,13 @@ struct ExportSheet: View {
                 row("File names") {
                     TextField("", text: $session.pattern)
                         .disabled(session.isPatternLocked || session.isExporting)
-                        .help("Tokens: {name} document, {region} region name, {index} or {index:02} position, {date} as YYMMDD")
+                        .help("Tokens: {name} document, {region} region name, {track} track name, {index} or {index:02} position, {date} as YYMMDD")
+                }
+            } else if session.scope == .stems {
+                row("File names") {
+                    TextField("", text: $session.stemPattern)
+                        .disabled(session.isPatternLocked || session.isExporting)
+                        .help("Tokens: {name} document, {track} track name, {index} or {index:02} track position, {date} as YYMMDD")
                 }
             }
             Text(session.summary)

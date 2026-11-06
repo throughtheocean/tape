@@ -1,0 +1,98 @@
+{
+  "document" : {
+    "channelCount" : 2,
+    "regions" : [
+      {
+        "fadeIn" : {
+          "blend" : 0.4,
+          "length" : 2000,
+          "shape" : "sCurve"
+        },
+        "fadeOut" : {
+          "blend" : 0.25,
+          "length" : 3000,
+          "shape" : "log"
+        },
+        "gainDB" : -2,
+        "id" : "5E5C6B28-2CFE-41F2-9E6C-1AAE1D4F2558",
+        "name" : "a",
+        "position" : 0,
+        "sourceId" : "8426F5FB-6A40-4017-89DB-25653DB6A389",
+        "sourceIn" : 0,
+        "sourceOut" : 9000
+      },
+      {
+        "fadeIn" : {
+          "blend" : 0.25,
+          "length" : 3000,
+          "shape" : "log"
+        },
+        "fadeOut" : {
+          "blend" : 0,
+          "length" : 0,
+          "shape" : "linear"
+        },
+        "gainDB" : 1.5,
+        "id" : "D66BE834-8B95-44F1-8511-485F622AB403",
+        "name" : "b",
+        "position" : 7000,
+        "sourceId" : "F15CF96A-89AD-4588-BCED-6CCB0907F973",
+        "sourceIn" : 1000,
+        "sourceOut" : 12000
+      },
+      {
+        "fadeIn" : {
+          "blend" : 0,
+          "length" : 0,
+          "shape" : "linear"
+        },
+        "fadeOut" : {
+          "blend" : 0.4,
+          "length" : 2000,
+          "shape" : "sCurve"
+        },
+        "gainDB" : 0,
+        "id" : "B7C681B2-4383-4776-99BE-3E253212BBA0",
+        "name" : "c",
+        "position" : 22000,
+        "sourceId" : "8426F5FB-6A40-4017-89DB-25653DB6A389",
+        "sourceIn" : 3000,
+        "sourceOut" : 8000
+      }
+    ],
+    "sessionRate" : 48000,
+    "sources" : [
+      {
+        "channelCount" : 2,
+        "frameCount" : 12000,
+        "id" : "8426F5FB-6A40-4017-89DB-25653DB6A389",
+        "location" : {
+          "package" : {
+            "fileName" : "src1.caf"
+          }
+        },
+        "name" : "src1.caf",
+        "sampleRate" : 48000
+      },
+      {
+        "channelCount" : 2,
+        "frameCount" : 12000,
+        "id" : "F15CF96A-89AD-4588-BCED-6CCB0907F973",
+        "location" : {
+          "package" : {
+            "fileName" : "src2.caf"
+          }
+        },
+        "name" : "src2.caf",
+        "sampleRate" : 48000
+      }
+    ]
+  },
+  "version" : 1,
+  "view" : {
+    "amplitudeZoom" : 1,
+    "loopEnabled" : false,
+    "playhead" : 0,
+    "viewStart" : 0
+  }
+}
