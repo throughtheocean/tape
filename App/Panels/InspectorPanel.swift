@@ -31,7 +31,7 @@ struct InspectorPanel: View {
     }
 
     @ViewBuilder private var regionShortcuts: some View {
-        shortcut("Command B", "Cut: split at playhead or range edges")
+        shortcut("Command B", "Split at playhead or range edges")
         shortcut("Drag name", "Move region")
         shortcut("Drag wave", "Mark audio")
         shortcut("Delete", "Cut out marked audio, else delete; ripple left")

@@ -138,7 +138,7 @@ final class SelfTest {
             case "lanesize": c.editor.cycleLaneHeight()
             case "expand": c.timeline.sideBar.expand.toggle()
             case "loudness": c.nextLoudnessReading(nil)
-            case "cut": c.editor.blade()
+            case "split": c.editor.blade()
             default: write("no button \(args.first ?? "")")
             }
         case "snapshot":

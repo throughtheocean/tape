@@ -1225,3 +1225,4 @@ Screenshots checked: the help window renders in dark mode, and the Inspector sho
 - The Inspector shortcut list and the help page describe it.
 
 By hand, `scripts/selftest/cut-split.txt`: a click at 60000 then Cut gave 0+60000 and 60000+132000 (source from 60000); a range 96000..<144000 then Cut gave four parts at 0, 60000, 96000 and 144000, the length still 192000; two undos gave back one region. Screenshot checked: Cut sits between Loop and Cut Out.
+- Renamed after Maik's look: the button is now **Split** (it splits, Cut Out removes). Self-test script renamed to `scripts/selftest/split.txt`; it gives the same states as before.

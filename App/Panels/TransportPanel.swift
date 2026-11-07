@@ -22,7 +22,7 @@ struct TransportPanel: View {
             .toggleStyle(.button)
             .help("Loop the range, else the selected regions, else everything (Command L)")
 
-            Button("Cut") { editor.blade() }
+            Button("Split") { editor.blade() }
                 .font(.system(size: 11))
                 .disabled(editor.project.regions.isEmpty)
                 .help("Split the regions at the playhead, or at both edges of the marked range (Command B)")

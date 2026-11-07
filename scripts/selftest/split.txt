@@ -1,0 +1,17 @@
+# The Split button splits at the playhead or at both range edges, removing nothing. Nothing is played.
+wait 1
+import /tmp/tape-m6-a.wav
+waitLoaded
+view 0 500
+mouse click f60000 wave
+button split
+log click at 60000 then Split: a 0+60000 and a 60000+132000 (source from 60000), undo 'Blade'
+mouse down f96000 wave
+mouse drag f144000 wave
+mouse up f144000 wave
+button split
+log range 96000..<144000 then Split: four parts 0, 60000, 96000, 144000, length still 192000
+key cmd+z
+key cmd+z
+log two undos: one region 0+192000
+quit
