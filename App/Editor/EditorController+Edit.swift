@@ -52,8 +52,10 @@ extension EditorController {
     func removeRange(ripple: Bool) {
         guard canRemoveRange, let range else { return }
         let tracks = rangeTracks
+        let settings = AppSettings.shared
+        let crossfade = settings.crossfadeCuts ? frames(ms: settings.crossfadeMs) : 0
         document.apply(ripple ? "Cut Out Range" : "Delete Range Leaving Gap") {
-            EditOperations.removeRange(&$0, range, tracks: tracks, ripple: ripple)
+            EditOperations.removeRange(&$0, range, tracks: tracks, ripple: ripple, crossfade: crossfade)
         }
         selection = []
         clearRange()

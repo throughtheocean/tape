@@ -1,5 +1,6 @@
 import AVFoundation
 import AppKit
+import WebKit
 import HardwarePresets
 import TapeCore
 
@@ -145,6 +146,8 @@ final class SelfTest {
             dump(c, label: args.joined(separator: " "))
         case "set":
             setting(args)
+        case "help":
+            help(args.first ?? "state")
         case "sheet":
             sheet(args.first ?? "return", controller: c)
         case "preview":
@@ -304,6 +307,8 @@ final class SelfTest {
         let s = AppSettings.shared
         switch args[0] {
         case "snap": s.snapToZeroCrossing = args[1] == "on"
+        case "crossfade":
+            if let ms = Double(args[1]) { s.crossfadeMs = ms } else { s.crossfadeCuts = args[1] == "on" }
         case "target": s.loudnessTarget = Double(args[1]) ?? 0
         case "preroll": RecordController.shared.setPreRoll(Double(args[1]) ?? 10)
         case "container": RecordController.shared.setContainer(AudioContainer(rawValue: args[1]) ?? .wav)
@@ -660,7 +665,7 @@ final class SelfTest {
         s += " input \(rec.device?.name ?? "none") needsPermission \(rec.needsPermission) recording \(rec.isRecording)"
         if let err = rec.inputError { s += " inputError '\(err)'" }
         s += " tool \(e.tool) sheet \(c.window?.attachedSheet != nil) sources \(d.project.sources.count) unused \(d.unusedSources.count) orphans \(d.cleanUpPreview().files)"
-        s += " inspector \(c.isInspectorVisible) timelineHeight \(Int(c.timeline.bounds.height)) snap \(AppSettings.shared.snapToZeroCrossing)"
+        s += " inspector \(c.isInspectorVisible) timelineHeight \(Int(c.timeline.bounds.height)) snap \(AppSettings.shared.snapToZeroCrossing) crossfade \(AppSettings.shared.crossfadeCuts) \(Int(AppSettings.shared.crossfadeMs))ms"
         if let alert = c.openAlert { s += " alert '\(alert.messageText)'" }
         if let responder = c.window?.firstResponder { s += " focus \(type(of: responder))" }
         write(s)
@@ -727,6 +732,7 @@ final class SelfTest {
         case "down": view.mouseDown(with: event(.leftMouseDown))
         case "drag": view.mouseDragged(with: event(.leftMouseDragged))
         case "up": view.mouseUp(with: event(.leftMouseUp))
+        case "tip": write("tip T\(n) \(args[2]): \(view.view(view, stringForToolTip: 0, point: p, userData: nil))")
         case "click":
             view.mouseDown(with: event(.leftMouseDown))
             view.mouseUp(with: event(.leftMouseUp))
@@ -737,9 +743,14 @@ final class SelfTest {
         }
     }
 
-    /// `master <add|gain@fraction|double>`: the master strip.
+    /// `master <add|gain@fraction|double>`: the master strip. `master tip <zone>` logs its tooltip.
     private func master(_ args: [String], controller c: MainWindowController) {
         let view = c.timeline.headers.master
+        if args.first == "tip", args.count > 1 {
+            let p = view.point(zone: args[1], fraction: nil)
+            write("tip master \(args[1]): \(view.view(view, stringForToolTip: 0, point: p, userData: nil))")
+            return
+        }
         let spec = args.first ?? ""
         let parts = spec.split(separator: "@")
         let p = view.point(zone: String(parts[0]), fraction: parts.count > 1 ? Double(parts[1]) : nil)
@@ -752,6 +763,18 @@ final class SelfTest {
         let clicks = args.count > 1 && args[1] == "double" ? 2 : 1
         view.mouseDown(with: event(.leftMouseDown, clicks: clicks))
         view.mouseUp(with: event(.leftMouseUp, clicks: clicks))
+    }
+
+    /// `help open|close|state`: the help window and the page it shows.
+    private func help(_ action: String) {
+        let w = HelpWindow.shared
+        switch action {
+        case "open": w.show()
+        case "close": w.close()
+        default:
+            let web = w.window?.contentView as? WKWebView
+            write("help visible \(w.window?.isVisible ?? false) key \(w.window?.isKeyWindow ?? false) title '\(web?.title ?? "")' url \(web?.url?.lastPathComponent ?? "none") loading \(web?.isLoading ?? false)")
+        }
     }
 
     /// Logs the meters as the header column shows them.

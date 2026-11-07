@@ -141,7 +141,7 @@ struct RegionInspector: View {
     }
 }
 
-/// Default fade length (F) and nudge step (, and .).
+/// Default fade length (F), nudge step (, and .) and the crossfade at cuts.
 struct EditSettings: View {
     @ObservedObject var settings = AppSettings.shared
 
@@ -158,6 +158,7 @@ struct EditSettings: View {
                 }
                 .labelsHidden()
                 .frame(width: 100)
+                .help("Length the F key gives both ends of the selected regions")
             }
             HStack {
                 Text("Nudge").foregroundStyle(Color.tapeSecondary)
@@ -168,6 +169,21 @@ struct EditSettings: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(width: 150)
+                .help("How far , and . move the selected regions")
+            }
+            HStack {
+                Toggle("Crossfade cuts", isOn: $settings.crossfadeCuts)
+                    .toggleStyle(.checkbox)
+                    .foregroundStyle(Color.tapeSecondary)
+                    .help("Cut Out joins the two parts with a short crossfade, so the cut does not click")
+                Spacer()
+                Picker("", selection: $settings.crossfadeMs) {
+                    ForEach(AppSettings.crossfadeChoices, id: \.self) { Text("\(Int($0)) ms").tag($0) }
+                }
+                .labelsHidden()
+                .frame(width: 100)
+                .disabled(!settings.crossfadeCuts)
+                .help("Length of the crossfade at a cut")
             }
         }
         .font(.system(size: 12))

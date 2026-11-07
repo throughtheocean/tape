@@ -3,6 +3,7 @@ wait 1
 import /tmp/tape-m6-a.wav
 waitLoaded
 view 0 500
+set crossfade off
 mouse down f48000 wave
 mouse drag f70000 wave
 mouse drag f96000 wave

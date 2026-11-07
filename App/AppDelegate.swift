@@ -103,6 +103,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppSettings.shared.openDocuments = controllers.map { $0.tapeDocument.package.url.path }
     }
 
+    @objc func showHelp(_ sender: Any?) { HelpWindow.shared.show() }
+
     @objc func newDocument(_ sender: Any?) {
         do {
             show(try TapeDocument.createUntitled())

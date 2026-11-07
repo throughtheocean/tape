@@ -218,7 +218,7 @@ final class FlippedView: NSView {
 
 /// One track's header: swatch, name, magnetic, mute, solo, gain, pan and a thin peak meter on the right edge.
 @MainActor
-final class TrackHeaderView: NSView, NSTextFieldDelegate {
+final class TrackHeaderView: NSView, NSTextFieldDelegate, NSViewToolTipOwner {
     struct State: Equatable {
         var track: Track
         var selected: Bool
@@ -308,6 +308,27 @@ final class TrackHeaderView: NSView, NSTextFieldDelegate {
         HeaderDrawing.slider(z.pan, position: (s.track.pan + 1) / 2, color: color, centered: true, mark: 0.5)
         HeaderDrawing.text(Fader.panText(s.track.pan), in: z.panText, align: .center)
         HeaderDrawing.meter(z.meter, levelDB: Double(s.level) / 4, holdDB: Double(s.hold) / 4, clipped: s.clipped, vertical: true)
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        removeAllToolTips()
+        addToolTip(bounds, owner: self, userData: nil)
+    }
+
+    func view(_ view: NSView, stringForToolTip tag: NSView.ToolTipTag, point: NSPoint,
+                       userData data: UnsafeMutableRawPointer?) -> String {
+        let z = zones
+        if z.magnet.insetBy(dx: -1, dy: -3).contains(point) {
+            return "Magnetic (Shift Command G): the regions follow each other without gaps"
+        }
+        if z.mute.insetBy(dx: -2, dy: -3).contains(point) { return "Mute this track" }
+        if z.solo.insetBy(dx: -2, dy: -3).contains(point) { return "Solo: only soloed tracks play" }
+        if z.swatch.insetBy(dx: -4, dy: -4).contains(point) { return "Track color" }
+        if z.gain.contains(point) || z.gainText.contains(point) { return "Track gain. Drag; double click for 0 dB" }
+        if z.pan.contains(point) || z.panText.contains(point) { return "Pan. Drag; double click to center" }
+        if z.meter.insetBy(dx: -3, dy: 0).contains(point) { return "Track level. Click to clear the clip light" }
+        return "Double click the name to rename; drag to reorder tracks"
     }
 
     /// Centre of a named zone, or a point along a slider (self-test).
@@ -484,7 +505,7 @@ final class TrackHeaderView: NSView, NSTextFieldDelegate {
 
 /// Bottom of the header column: add track button, master gain and stereo meter.
 @MainActor
-final class MasterStripView: NSView {
+final class MasterStripView: NSView, NSViewToolTipOwner {
     let editor: EditorController
     private var drawn: [Int]?
     private var dragging = false
@@ -502,6 +523,8 @@ final class MasterStripView: NSView {
 
     /// Centre of `add` or `gain`, with a fraction along the gain slider (self-test).
     func point(zone: String, fraction: Double?) -> NSPoint {
+        if zone == "meter" { return NSPoint(x: meterRect(0).midX, y: meterRect(0).midY) }
+        if zone == "body" { return NSPoint(x: 8, y: 3) }
         guard zone == "gain" else { return NSPoint(x: addRect.midX, y: addRect.midY) }
         guard let fraction else { return NSPoint(x: gainRect.midX, y: gainRect.midY) }
         return NSPoint(x: gainRect.minX + 4 + (gainRect.width - 8) * CGFloat(fraction), y: gainRect.midY)
@@ -540,6 +563,20 @@ final class MasterStripView: NSView {
             let m = editor.masterMeters[c]
             HeaderDrawing.meter(meterRect(c), levelDB: m.levelDB, holdDB: m.holdDB, clipped: m.clipped, vertical: false)
         }
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        removeAllToolTips()
+        addToolTip(bounds, owner: self, userData: nil)
+    }
+
+    func view(_ view: NSView, stringForToolTip tag: NSView.ToolTipTag, point: NSPoint,
+                       userData data: UnsafeMutableRawPointer?) -> String {
+        if addRect.insetBy(dx: -2, dy: -2).contains(point) { return "Add Track (Command T)" }
+        if gainRect.contains(point) || gainText.contains(point) { return "Master gain. Drag; double click for 0 dB" }
+        if point.y >= 46 { return "Master level. Click to clear the clip lights" }
+        return "Master: the mix of all tracks"
     }
 
     override func mouseDown(with event: NSEvent) {

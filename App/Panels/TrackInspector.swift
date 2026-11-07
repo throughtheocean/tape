@@ -55,9 +55,11 @@ struct TrackInspector: View {
                 Toggle("Mute", isOn: Binding(get: { track.mute }, set: { on in
                     editor.updateTrack(on ? "Mute" : "Unmute", track.id) { $0.mute = on }
                 }))
+                .help("Silence this track")
                 Toggle("Solo", isOn: Binding(get: { track.solo }, set: { on in
                     editor.updateTrack(on ? "Solo" : "Unsolo", track.id) { $0.solo = on }
                 }))
+                .help("Only soloed tracks play")
                 Spacer()
             }
             .toggleStyle(.checkbox)

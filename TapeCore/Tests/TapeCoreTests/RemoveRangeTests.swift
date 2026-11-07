@@ -72,4 +72,53 @@ final class RemoveRangeTests: XCTestCase {
         }
         XCTAssertEqual(p, before)
     }
+
+    private func fades(_ p: Project, track: UUID = Track.firstID) -> [String] {
+        p.regions(onTrack: track).sorted { $0.position < $1.position }.map { "\($0.fadeIn.length)/\($0.fadeOut.length)" }
+    }
+
+    func testCrossfadeOverlapsBothPartsIntoTheRemovedAudio() {
+        var (p, _) = twoTracks()
+        EditOperations.edit(&p) {
+            EditOperations.removeRange(&$0, SampleRange(start: 300, end: 1300), tracks: [Track.firstID], ripple: true, crossfade: 200)
+        }
+        // b only had 100 frames inside the range, so the overlap is 2 x 100.
+        XCTAssertEqual(layout(p), ["a@0+400 in 1000", "b@200+800 in 1000"])
+        XCTAssertEqual(fades(p), ["0/200", "200/0"])
+        XCTAssertEqual(p.regions.first { $0.position == 200 }?.fadeIn.shape, .sCurve)
+    }
+
+    func testCrossfadeInsideOneRegion() {
+        var (p, _) = twoTracks()
+        EditOperations.edit(&p) {
+            EditOperations.removeRange(&$0, SampleRange(start: 200, end: 500), tracks: [Track.firstID], ripple: true, crossfade: 200)
+        }
+        XCTAssertEqual(layout(p), ["a@0+300 in 1000", "a@100+600 in 1400", "b@900+800 in 1000"])
+        XCTAssertEqual(fades(p), ["0/200", "200/0", "0/0"])
+    }
+
+    func testLeavingTheGapFadesTheCutEdges() {
+        var (p, _) = twoTracks()
+        EditOperations.edit(&p) {
+            EditOperations.removeRange(&$0, SampleRange(start: 300, end: 1300), tracks: [Track.firstID], ripple: false, crossfade: 200)
+        }
+        XCTAssertEqual(layout(p), ["a@0+300 in 1000", "b@1300+700 in 1100"])
+        XCTAssertEqual(fades(p), ["0/100", "100/0"])
+    }
+
+    func testCrossfadeKeepsAConstantLevelAcrossTheJoin() {
+        var p = Project(sessionRate: 48000, channelCount: 1)
+        p.regions = [Region(name: "dc", sourceId: src, sourceIn: 0, sourceOut: 20000, position: 0)]
+        EditOperations.edit(&p) {
+            EditOperations.removeRange(&$0, SampleRange(start: 5000, end: 9000), tracks: [Track.firstID], ripple: true, crossfade: 480)
+        }
+        XCTAssertEqual(p.regions.count, 2)
+        let sources: [UUID: SampleSource] = [src: MemorySource(samples: [[Float](repeating: 0.5, count: 20000)])]
+        let out = SampleBuffer(channelCount: 2, capacity: 15000)
+        EditListRenderer(maxFrames: 1024).render(EditList(project: p, sources: sources), start: 0, frames: 15000, into: out)
+        let left = out.toArrays(count: 15000)[0]
+        let level = left[100]
+        XCTAssertGreaterThan(level, 0.1)
+        for i in 4000..<6000 { XCTAssertEqual(left[i], level, accuracy: 1e-4, "frame \(i)") }
+    }
 }

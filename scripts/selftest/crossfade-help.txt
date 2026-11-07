@@ -1,0 +1,53 @@
+# Crossfade at cuts (on, off, length, leaving the gap), the Edit menu toggle, tooltips, the help window. Nothing is played.
+wait 1
+import /tmp/tape-m6-a.wav
+waitLoaded
+view 0 500
+set crossfade on
+set crossfade 10
+mouse down f48000 wave
+mouse drag f96000 wave
+mouse up f96000 wave
+key delete
+log crossfade 10 ms: a 0+48240 out 48240 fadeOut 480 sCurve; a pos 47760 in 95760 fadeIn 480 sCurve
+key cmd+z
+set crossfade off
+mouse down f48000 wave
+mouse drag f96000 wave
+mouse up f96000 wave
+key delete
+log crossfade off: a 0+48000, a 48000+96000 in 96000, no fades
+key cmd+z
+menu Crossfade Cuts
+mouse down f48000 wave
+mouse drag f96000 wave
+mouse up f96000 wave
+key fwddelete
+log menu turned it on; gap stays: a 0+48000 fadeOut 240, a 96000 fadeIn 240
+key cmd+z
+set crossfade 50
+mouse down f48000 wave
+mouse drag f96000 wave
+mouse up f96000 wave
+key delete
+log crossfade 50 ms: a 0+49200 fadeOut 2400, a pos 46800 in 94800 fadeIn 2400
+key cmd+z
+key shift+cmd+m
+header 1 tip swatch
+header 1 tip name
+header 1 tip magnet
+header 1 tip mute
+header 1 tip solo
+header 1 tip gain
+header 1 tip pan
+header 1 tip meter
+master tip add
+master tip gain
+master tip meter
+master tip body
+help open
+wait 1.5
+help state
+help close
+help state
+quit

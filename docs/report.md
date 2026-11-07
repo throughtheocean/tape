@@ -1198,3 +1198,21 @@ Tests: `RemoveRangeTests` (ripple on the chosen track only, leaving the time emp
 By hand, `scripts/selftest/cut-out.txt`: a drag in the waveform from 1 s to 2 s marked 48000..<96000 and left the region in place; Delete gave two regions, 0+48000 and 48000+96000 reading the source from 96000; Forward Delete left them at 0 and 96000; a drag on the name strip moved the region by 1 s; without a range Delete removed the region. `m3-edit`, `m6-multitrack`, `m10a-only-drop-overlap` and `m10c-magnetic` now press the name strip where they move regions, and give the same states as before the change (compared against a build of the previous commit).
 
 Open: a cut is a hard edit with no fade at the join. With Snap on, the range edges sit on zero crossings, which usually avoids a click; a short crossfade at the join belongs with the crossfade command planned for M12.
+
+## Crossfade at cuts, hover texts, help (Maik's request)
+
+- **Crossfade cuts.** Cut Out (Delete with a range) now joins the two parts with a short crossfade: the left part keeps playing half the crossfade into the removed audio, the right part starts half the crossfade early, and the two overlap with S-curve fades. S-curve in plus S-curve out sum to exactly 1, so a steady signal keeps its level across the join (tested: a constant signal stays within 0.0001 through the join). The total length of the result is unchanged by the crossfade; the join sits where the cut was.
+- On and off: Edit > Crossfade Cuts, or the "Crossfade cuts" checkbox in the Inspector's Editing section, with the length next to it (5, 10, 20 or 50 ms; default on, 10 ms). The setting is stored like the default fade length.
+- Where an overlap is not possible, each cut edge gets a short S-curve fade of half the length instead: when the gap stays (Forward Delete), on a magnetic track (its regions follow each other and cannot overlap), and when the audio next to the cut is too short. The overlap never reaches past the end of the source audio or beyond half a part.
+- **Hover texts.** The track header (color swatch, name, magnet, M, S, gain, pan, meter) and the master strip (Add Track, gain, meters) draw their controls themselves and had none; each zone now has a tooltip. The Inspector's Mute, Solo, default fade, nudge and crossfade controls got help texts too. The transport, tool strip, zoom bar and record bar already had them.
+- **Help.** There was no help file and no Help menu. Now Help > Tape Help (Command ?) opens a window with a bundled page (`App/Support/TapeHelp.html`): getting started, editing, cutting out and crossfades, playback and loop, tracks, magnetic tracks, process and export, and a key list. The Help menu also has the standard macOS menu search. The page is plain HTML in a WebKit view, not an Apple Help Book: help books need an indexed bundle and are cached by the system help viewer, which makes them hard to update during development.
+
+Tests: `RemoveRangeTests` gained four (overlap at a ripple join, a cut inside one region, edge fades when the gap stays, constant level across the join). 135 TapeCore tests, 5 skipped, 0 failures.
+
+By hand, `scripts/selftest/crossfade-help.txt` on a 4 s file, cutting out 1 s to 2 s:
+- crossfade 10 ms: parts 0+48240 and 47760+96240 (source from 95760), 480 frame S-curve fades;
+- crossfade off: 0+48000 and 48000+96000, no fades;
+- Edit menu toggle back on, Forward Delete: 240 frame fades at both cut edges, the gap stays;
+- 50 ms: 0+49200 and 46800 (source from 94800), 2400 frame fades;
+- all twelve tooltips read back from the header and master strip; the help window opened with the page loaded ("Tape Help", `TapeHelp.html`) and closed.
+Screenshots checked: the help window renders in dark mode, and the Inspector shows the Crossfade cuts row. `cut-out.txt` now switches crossfade off, since it tests the plain cut; with that, `cut-out`, `m3-edit`, `m6-multitrack` and `m10c-magnetic` give the same states as a build of the previous commit.

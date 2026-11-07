@@ -44,6 +44,7 @@ enum MainMenu {
         item(edit, "Delete", #selector(MainWindowController.deleteRegions(_:)), "\u{8}", [])
         item(edit, "Delete Leaving Gap", #selector(MainWindowController.deleteRegionsLeavingGap(_:)), key(NSDeleteFunctionKey), [])
         item(edit, "Duplicate", #selector(MainWindowController.duplicateRegions(_:)), "d")
+        item(edit, "Crossfade Cuts", #selector(MainWindowController.toggleCrossfadeCuts(_:)), "")
         edit.addItem(.separator())
         item(edit, "Apply Default Fades", #selector(MainWindowController.applyDefaultFades(_:)), "f", [])
         item(edit, "Fades...", #selector(MainWindowController.showFadeDialog(_:)), "f", [.command, .option])
@@ -111,6 +112,10 @@ enum MainMenu {
         item(window, "Minimize", #selector(NSWindow.performMiniaturize(_:)), "m")
         window.addItem(withTitle: "Zoom", action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
         NSApp.windowsMenu = window
+
+        let help = submenu(main, "Help")
+        item(help, "Tape Help", #selector(AppDelegate.showHelp(_:)), "?")
+        NSApp.helpMenu = help
 
         return main
     }

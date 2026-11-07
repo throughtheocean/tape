@@ -79,7 +79,13 @@ public enum EditOperations {
     /// Cuts `range` out of the regions on `tracks`: they are split at its edges and the parts inside go.
     /// With `ripple` everything on those tracks after the range moves left by its length; without, the time stays
     /// empty, and on a magnetic track a gap region of the range's length keeps the sequence. Other tracks stay.
-    public static func removeRange(_ project: inout Project, _ range: SampleRange, tracks: Set<UUID>, ripple: Bool) {
+    ///
+    /// `crossfade` (frames, 0 for none) smooths the cut. Where a ripple joins two parts of audio that continued into
+    /// the range, both parts reach `crossfade / 2` into the removed audio and overlap by `crossfade` with S-curve
+    /// fades, which add up to unity. Elsewhere (the time left empty, a magnetic track, no audio beyond the cut)
+    /// each cut edge gets an S-curve fade of `crossfade / 2`.
+    public static func removeRange(_ project: inout Project, _ range: SampleRange, tracks: Set<UUID>, ripple: Bool,
+                                   crossfade: Int64 = 0) {
         guard !range.isEmpty else { return }
         let hit = Set(project.regions.filter {
             tracks.contains($0.trackId) && $0.position < range.end && $0.end > range.start
@@ -91,6 +97,24 @@ public enum EditOperations {
             candidates.contains($0.id) && $0.position >= range.start && $0.end <= range.end
         }.map(\.id))
         let emptied = Set(project.regions.filter { inside.contains($0.id) }.map(\.trackId))
+        // Per track, the parts left and right of the cut, and how much audio continued past each into the range.
+        var joins: [(left: UUID?, right: UUID?, intoLeft: Int64, intoRight: Int64)] = []
+        if crossfade > 0 {
+            let pieces = project.regions.filter { candidates.contains($0.id) }
+            for track in tracks {
+                let here = pieces.filter { $0.trackId == track }
+                let left = here.first { $0.end == range.start && !inside.contains($0.id) }
+                let right = here.first { $0.position == range.end && !inside.contains($0.id) }
+                let afterLeft = left.flatMap { l in
+                    here.first { inside.contains($0.id) && $0.position == range.start && $0.sourceId == l.sourceId && $0.sourceIn == l.sourceOut }
+                }
+                let beforeRight = right.flatMap { r in
+                    here.first { inside.contains($0.id) && $0.end == range.end && $0.sourceId == r.sourceId && $0.sourceOut == r.sourceIn }
+                }
+                guard left != nil || right != nil else { continue }
+                joins.append((left?.id, right?.id, afterLeft?.length ?? 0, beforeRight?.length ?? 0))
+            }
+        }
         project.regions.removeAll { inside.contains($0.id) }
         if ripple {
             for i in project.regions.indices where tracks.contains(project.regions[i].trackId)
@@ -102,7 +126,34 @@ public enum EditOperations {
                 project.regions.append(.gap(track: track, position: range.start, length: range.length))
             }
         }
+        for join in joins {
+            guard let li = join.left.flatMap({ id in project.regions.firstIndex { $0.id == id } }),
+                  let ri = join.right.flatMap({ id in project.regions.firstIndex { $0.id == id } }) else {
+                for id in [join.left, join.right].compactMap({ $0 }) {
+                    if let i = project.regions.firstIndex(where: { $0.id == id }) { fadeCutEdge(&project.regions[i], id == join.left, crossfade / 2) }
+                }
+                continue
+            }
+            let half = min(crossfade / 2, join.intoLeft, join.intoRight, project.regions[li].length, project.regions[ri].length)
+            if ripple, half > 0, project.track(project.regions[li].trackId)?.magnetic != true {
+                project.regions[li].sourceOut += half
+                project.regions[li].fadeOut = Fade(length: 2 * half, shape: .sCurve)
+                project.regions[ri].sourceIn -= half
+                project.regions[ri].position -= half
+                project.regions[ri].fadeIn = Fade(length: 2 * half, shape: .sCurve)
+            } else {
+                fadeCutEdge(&project.regions[li], true, crossfade / 2)
+                fadeCutEdge(&project.regions[ri], false, crossfade / 2)
+            }
+        }
         project.sortRegions()
+    }
+
+    /// A short S-curve fade on the end (`atEnd`) or start of a region at a cut, at most half its length.
+    private static func fadeCutEdge(_ r: inout Region, _ atEnd: Bool, _ length: Int64) {
+        let l = min(length, r.length / 2)
+        guard l > 0 else { return }
+        if atEnd { r.fadeOut = Fade(length: l, shape: .sCurve) } else { r.fadeIn = Fade(length: l, shape: .sCurve) }
     }
 
     // MARK: Duplicate

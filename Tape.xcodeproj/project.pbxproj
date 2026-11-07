@@ -23,6 +23,7 @@
 		3A2ACFB2EC93C2C2FE13E4E7 /* RecordRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B0EAA73E0D4806827A756D0 /* RecordRow.swift */; };
 		61DA5651EAAC148B7931AC3C /* EditorController+Tracks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 673E0BA64A4334F7B01EBAF2 /* EditorController+Tracks.swift */; };
 		6A28821FA87E29E334D3957E /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314F43268D44A239651F929E /* TimelineView.swift */; };
+		6BF330A01D9CCD9B722E1325 /* TapeHelp.html in Resources */ = {isa = PBXBuildFile; fileRef = C57FFF187E6D136D609D6199 /* TapeHelp.html */; };
 		76A2D1DC7ED95AD0A9CFDE84 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0B97B8EB63527C26C8D04B /* main.swift */; };
 		8340375B4A3FBE50A27312F1 /* Theme+Tape.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A90DF3CCB1321122D49F1C4 /* Theme+Tape.swift */; };
 		867C8C3C8F2071481D9F7894 /* ZoomBars.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A45754EF627C1A421E4EA2 /* ZoomBars.swift */; };
@@ -38,6 +39,7 @@
 		D5F29CF5DF61F404B2480C7F /* ExportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F240DEBE3473C566A1142715 /* ExportSheet.swift */; };
 		DB1E6DCCF78F6DBE5B09A6EF /* Benchmark.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6E6CC35575F8BC4EA331E2F /* Benchmark.swift */; };
 		E720119E65817EF107EA1B0F /* TapeDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = C706A94B2DCF35FA4AF1CD20 /* TapeDocument.swift */; };
+		E7B913BD30523581B1D09916 /* HelpWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6BD8F4CE63EF8A5D3A33444 /* HelpWindow.swift */; };
 		F43FC7F71D0E43740C47CEA3 /* ExportSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = F8B0B74AB56E1FE9C1A558BF /* ExportSession.swift */; };
 		F5FA68136B342E6D25633B48 /* MainWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD71093FAD9D8D8AF8651895 /* MainWindowController.swift */; };
 		F75879D83194554262292096 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A973D8F2201B19458E321BDB /* AppSettings.swift */; };
@@ -75,9 +77,11 @@
 		A973D8F2201B19458E321BDB /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		AB81A6302F5CC78B60F90F2E /* RegionInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegionInspector.swift; sourceTree = "<group>"; };
 		AFCDF14646D1D2926481BD7E /* LoudnessMeterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoudnessMeterView.swift; sourceTree = "<group>"; };
+		B6BD8F4CE63EF8A5D3A33444 /* HelpWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpWindow.swift; sourceTree = "<group>"; };
 		B6E6CC35575F8BC4EA331E2F /* Benchmark.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Benchmark.swift; sourceTree = "<group>"; };
 		C32BD636D5C7DA0595E10C3F /* SelfTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelfTest.swift; sourceTree = "<group>"; };
 		C3A45754EF627C1A421E4EA2 /* ZoomBars.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomBars.swift; sourceTree = "<group>"; };
+		C57FFF187E6D136D609D6199 /* TapeHelp.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = TapeHelp.html; sourceTree = "<group>"; };
 		C706A94B2DCF35FA4AF1CD20 /* TapeDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapeDocument.swift; sourceTree = "<group>"; };
 		DB7B6A6AAF3534114573439C /* TrackHeaders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackHeaders.swift; sourceTree = "<group>"; };
 		DD71093FAD9D8D8AF8651895 /* MainWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainWindowController.swift; sourceTree = "<group>"; };
@@ -126,8 +130,10 @@
 			children = (
 				A973D8F2201B19458E321BDB /* AppSettings.swift */,
 				B6E6CC35575F8BC4EA331E2F /* Benchmark.swift */,
+				B6BD8F4CE63EF8A5D3A33444 /* HelpWindow.swift */,
 				223606CE2CF74F5D5D354D7C /* MagnetIcon.swift */,
 				C32BD636D5C7DA0595E10C3F /* SelfTest.swift */,
+				C57FFF187E6D136D609D6199 /* TapeHelp.html */,
 				48E068AC01D2C3FDC47FE76D /* Theme.swift */,
 				7A90DF3CCB1321122D49F1C4 /* Theme+Tape.swift */,
 				3837FBB61B2023113976DFF6 /* TimeFormat.swift */,
@@ -306,6 +312,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				F83A22AFC16402575D014989 /* Assets.xcassets in Resources */,
+				6BF330A01D9CCD9B722E1325 /* TapeHelp.html in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -326,6 +333,7 @@
 				D5F29CF5DF61F404B2480C7F /* ExportSheet.swift in Sources */,
 				882AE7F859184C1CF43830C2 /* FadeDialog.swift in Sources */,
 				FC08085114D7CC77C9B58324 /* FileDropView.swift in Sources */,
+				E7B913BD30523581B1D09916 /* HelpWindow.swift in Sources */,
 				297E4B5A7C85271E55869AC3 /* InspectorPanel.swift in Sources */,
 				075616A34081AE7E472322DA /* LoudnessMeterView.swift in Sources */,
 				AE65363F7D6498DDDF072998 /* MagnetIcon.swift in Sources */,

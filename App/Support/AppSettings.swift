@@ -120,6 +120,17 @@ final class AppSettings: ObservableObject {
 
     static let defaultFadeChoices: [Double] = [2, 5, 10, 20, 50, 100, 250, 500]
     static let nudgeChoices: [Double] = [1, 10, 100]
+    static let crossfadeChoices: [Double] = [5, 10, 20, 50]
+
+    /// Cut Out crossfades the join (and fades the edges when the gap stays).
+    @Published var crossfadeCuts: Bool {
+        didSet { defaults.set(crossfadeCuts, forKey: "crossfadeCuts") }
+    }
+
+    /// Length of that crossfade, in ms.
+    @Published var crossfadeMs: Double {
+        didSet { defaults.set(crossfadeMs, forKey: "crossfadeMs") }
+    }
 
     /// Length the F key gives both ends of the selected regions, in ms.
     @Published var defaultFadeMs: Double {
@@ -189,5 +200,7 @@ final class AppSettings: ObservableObject {
         inputMonitoring = InputMonitoring(rawValue: defaults.string(forKey: "inputMonitoring") ?? "") ?? .off
         defaultFadeMs = defaults.object(forKey: "defaultFadeMs") as? Double ?? 10
         nudgeMs = defaults.object(forKey: "nudgeMs") as? Double ?? 10
+        crossfadeCuts = defaults.object(forKey: "crossfadeCuts") as? Bool ?? true
+        crossfadeMs = defaults.object(forKey: "crossfadeMs") as? Double ?? 10
     }
 }

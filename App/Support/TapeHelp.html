@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tape Help</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 13px -apple-system, sans-serif; line-height: 1.5; max-width: 720px; margin: 24px auto; padding: 0 24px; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  h2 { font-size: 15px; margin-top: 28px; border-bottom: 1px solid rgba(128,128,128,0.3); padding-bottom: 4px; }
+  p.lead { color: gray; margin-top: 0; }
+  kbd { font: 11px ui-monospace, monospace; border: 1px solid rgba(128,128,128,0.5); border-radius: 4px; padding: 0 4px; }
+  table { border-collapse: collapse; width: 100%; }
+  td { padding: 3px 8px 3px 0; vertical-align: top; }
+  td:first-child { white-space: nowrap; width: 34%; }
+  nav a { margin-right: 12px; }
+</style>
+</head>
+<body>
+<h1>Tape Help</h1>
+<p class="lead">Record, cut and mix audio without fuss. Hover over any control to see what it does.</p>
+<nav>
+  <a href="#start">Getting started</a>
+  <a href="#edit">Editing</a>
+  <a href="#cut">Cutting out</a>
+  <a href="#play">Playback and loop</a>
+  <a href="#tracks">Tracks</a>
+  <a href="#magnetic">Magnetic tracks</a>
+  <a href="#process">Process and export</a>
+  <a href="#keys">Keys</a>
+</nav>
+
+<h2 id="start">Getting started</h2>
+<p>Drop audio files on the window or choose File &gt; Import Audio (<kbd>Command I</kbd>). Each file becomes a region on the timeline. The source files are never changed: every edit only changes which part of a file plays, where and how loud.</p>
+<p>To record, pick the input in the record bar at the top of the window and press <kbd>R</kbd>. <kbd>R</kbd> or <kbd>Space</kbd> stops. The new take lands at the playhead on the selected track.</p>
+<p>Zoom with <kbd>Command =</kbd> and <kbd>Command -</kbd>, Option scroll, or the overview bar at the top. <kbd>Shift Z</kbd> fits everything.</p>
+
+<h2 id="edit">Editing</h2>
+<p>Every region has a name strip at the top and its waveform below.</p>
+<table>
+  <tr><td>Drag the name strip</td><td>Moves the region. Option drag moves a copy. In multitrack view, drag up or down to move it to another track.</td></tr>
+  <tr><td>Drag in the waveform</td><td>Marks a range of audio. Shift drag marks a range anywhere.</td></tr>
+  <tr><td>Drag a region edge</td><td>Trims the region.</td></tr>
+  <tr><td>Fade handles</td><td>Drag the small handles at the top corners of the waveform to fade in or out. Option drag the midpoint to change the shape. Shift drag fades all selected regions.</td></tr>
+  <tr><td>Blade</td><td><kbd>Command B</kbd> splits the selected regions at the playhead, or at both range edges. <kbd>B</kbd> picks the blade tool, <kbd>A</kbd> the select tool.</td></tr>
+  <tr><td>Nudge</td><td><kbd>,</kbd> and <kbd>.</kbd> move the selected regions by the nudge step set in the Inspector.</td></tr>
+  <tr><td>Snap</td><td>Edits snap to zero crossings (<kbd>N</kbd> toggles). Hold Command while dragging to switch snapping off.</td></tr>
+</table>
+<p>Every edit can be undone with <kbd>Command Z</kbd>.</p>
+
+<h2 id="cut">Cutting out</h2>
+<p>Mark the part you do not want by dragging in the waveform, then press <kbd>Delete</kbd> or click Cut Out in the transport bar. The marked audio is removed and everything after it on that track moves left to close the gap.</p>
+<p><kbd>Forward Delete</kbd> removes the marked audio but leaves the gap, so nothing moves.</p>
+<p>With nothing marked, <kbd>Delete</kbd> removes the selected regions.</p>
+<p><b>Crossfade cuts.</b> When this is on (Edit &gt; Crossfade Cuts, or the Editing section of the Inspector), the two parts that meet at a cut overlap by a short crossfade, so the cut does not click. The length is set next to the switch; 10 ms is a good start for speech. When the gap stays, both cut edges get a short fade instead.</p>
+
+<h2 id="play">Playback and loop</h2>
+<p><kbd>Space</kbd> plays and pauses. <kbd>J</kbd>, <kbd>K</kbd> and <kbd>L</kbd> shuttle backwards, stop and forwards; press <kbd>J</kbd> or <kbd>L</kbd> again to go faster.</p>
+<p><kbd>I</kbd> and <kbd>O</kbd> set the range start and end at the playhead. <kbd>Option X</kbd> clears the range.</p>
+<p>The loop button in the transport bar (<kbd>Command L</kbd>) repeats the marked range. Without a range it loops the selected regions, and without a selection the whole project.</p>
+
+<h2 id="tracks">Tracks</h2>
+<p><kbd>Shift Command M</kbd> switches between the single track view and the multitrack view. <kbd>Command T</kbd> adds a track.</p>
+<p>Each track header has, from left to right: the color swatch, the name (double click to rename, drag to reorder), the magnet, Mute (M), Solo (S), a gain slider, a pan slider and a level meter. Double click the gain slider for 0 dB, or the pan slider to center it. Click a meter to clear its clip light.</p>
+<p>The master strip at the top controls the level of the whole mix.</p>
+
+<h2 id="magnetic">Magnetic tracks</h2>
+<p>Click the magnet in a track header (<kbd>Shift Command G</kbd>) to make the track magnetic. Its regions then follow each other without gaps, starting where the first region was. Dragging a region reorders the sequence; an insertion line shows where it lands. Removing a region closes the gap, unless you use Forward Delete.</p>
+<p>A region on another track can be connected to a region on a magnetic track: Option Command drag it, or use Connect to in the Inspector. Connected regions move along with their anchor.</p>
+
+<h2 id="process">Process and export</h2>
+<p>The Process menu applies Normalize, Gain, Remove DC Offset, Trim Silence, Reverse, Compressor, Limiter and Resample to the selected regions. Most of them can be previewed before you apply.</p>
+<p>File &gt; Export (<kbd>Command E</kbd>) writes the mix or the range to WAV, AIFF, CAF, FLAC, ALAC or AAC. Export Each Region (<kbd>Shift Command E</kbd>) writes every selected region to its own file.</p>
+
+<h2 id="keys">Keys</h2>
+<table>
+  <tr><td><kbd>Space</kbd></td><td>Play or pause</td></tr>
+  <tr><td><kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd></td><td>Shuttle back, stop, forward</td></tr>
+  <tr><td><kbd>I</kbd> <kbd>O</kbd></td><td>Range start, range end</td></tr>
+  <tr><td><kbd>Option X</kbd></td><td>Clear range</td></tr>
+  <tr><td><kbd>Command L</kbd></td><td>Loop playback</td></tr>
+  <tr><td><kbd>R</kbd></td><td>Record</td></tr>
+  <tr><td><kbd>Home</kbd> <kbd>End</kbd></td><td>Go to start, end</td></tr>
+  <tr><td><kbd>Delete</kbd></td><td>Cut out marked audio, else delete regions</td></tr>
+  <tr><td><kbd>Forward Delete</kbd></td><td>The same, leaving the gap</td></tr>
+  <tr><td><kbd>Command B</kbd></td><td>Blade</td></tr>
+  <tr><td><kbd>Command D</kbd></td><td>Duplicate</td></tr>
+  <tr><td><kbd>F</kbd></td><td>Default fades</td></tr>
+  <tr><td><kbd>Option Command F</kbd></td><td>Fade dialog</td></tr>
+  <tr><td><kbd>,</kbd> <kbd>.</kbd></td><td>Nudge left, right</td></tr>
+  <tr><td><kbd>Command A</kbd></td><td>Select all regions</td></tr>
+  <tr><td><kbd>A</kbd> <kbd>B</kbd></td><td>Select tool, blade tool</td></tr>
+  <tr><td><kbd>N</kbd></td><td>Snap to zero crossing</td></tr>
+  <tr><td><kbd>Shift Z</kbd></td><td>Zoom to fit</td></tr>
+  <tr><td><kbd>Up</kbd> <kbd>Down</kbd></td><td>Previous, next track</td></tr>
+  <tr><td><kbd>Option S</kbd></td><td>Hear only this track</td></tr>
+  <tr><td><kbd>Shift Command M</kbd></td><td>Single or multitrack view</td></tr>
+  <tr><td><kbd>Shift Command G</kbd></td><td>Magnetic track</td></tr>
+  <tr><td><kbd>Command T</kbd></td><td>Add track</td></tr>
+  <tr><td><kbd>Option Command I</kbd></td><td>Show or hide the Inspector</td></tr>
+  <tr><td><kbd>Command I</kbd></td><td>Import audio</td></tr>
+  <tr><td><kbd>Command E</kbd></td><td>Export</td></tr>
+</table>
+</body>
+</html>
