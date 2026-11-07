@@ -1216,3 +1216,12 @@ By hand, `scripts/selftest/crossfade-help.txt` on a 4 s file, cutting out 1 s to
 - 50 ms: 0+49200 and 46800 (source from 94800), 2400 frame fades;
 - all twelve tooltips read back from the header and master strip; the help window opened with the page loaded ("Tape Help", `TapeHelp.html`) and closed.
 Screenshots checked: the help window renders in dark mode, and the Inspector shows the Crossfade cuts row. `cut-out.txt` now switches crossfade off, since it tests the plain cut; with that, `cut-out`, `m3-edit`, `m6-multitrack` and `m10c-magnetic` give the same states as a build of the previous commit.
+
+## Cut button (Maik's request)
+
+- A **Cut** button in the transport, before Cut Out, splits the regions at the playhead, or at both edges of the marked range, and removes nothing. Click in a waveform to place the playhead, press Cut. It is the existing Blade command (Command B, Edit > Blade) as a button, so it applies to the same regions: the shown track in the single view, every track in the multitrack view. Undo names it "Blade". Cut Out stays as it was.
+- The button is enabled while there are regions, like the menu item; the playhead is not observed by the transport, so it cannot follow whether a region lies under it.
+- Edit > Cut (Command X) is still the text clipboard only; it does not cut audio.
+- The Inspector shortcut list and the help page describe it.
+
+By hand, `scripts/selftest/cut-split.txt`: a click at 60000 then Cut gave 0+60000 and 60000+132000 (source from 60000); a range 96000..<144000 then Cut gave four parts at 0, 60000, 96000 and 144000, the length still 192000; two undos gave back one region. Screenshot checked: Cut sits between Loop and Cut Out.
