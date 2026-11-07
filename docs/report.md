@@ -1048,3 +1048,13 @@ I do not play audio here, so the 1 ms check is yours. `scripts/selftest/m10b-loo
 2. Overdub at speeds other than 1x stops playback and records as before. The take can't be in time at another speed.
 3. A loop is suspended during an overdub. Loop recording into takes is not in the spec; the idea is in `docs/v2.md`.
 4. Through monitoring uses a second engine on the default output (see above), so it can click when input and output are different devices.
+
+### M10b follow-up
+
+- **Placement formula documented.** `docs/datenmodell.md` has a section "Overdub placement" with the formula and why the IO buffer is not added and the output latency is subtracted, and that the loopback test is the judge of any change to it.
+- **Monitor note.** When the input and the default output are different devices and Through is on, the latency beside the Monitor control reads "73.2 ms, may click: different devices"; the tooltip explains the drift and that the recording is not affected. With one device for both (the Babyface) the note is not shown. I first put the text into the menu item itself, but a menu picker sizes to its widest item, which made the control wide even at "Monitor Off".
+- **R during shuttle snaps to 1x and records**, like a tape machine. Forward at 2x to 8x and reverse alike: playback continues at 1x forward from where it is, the take starts there. The placement waits for playback's first buffer at 1x (a few ms after the snap) and uses the same formula. `scripts/selftest/m10b-shuttle.txt`, three runs: from 2x forward, playback was at 1x 0.3 s after R, the take landed at frame 99147 to 100110; from reverse, the same. All three runs placed the take within 2.3 ms of where 1x playback resumed, minus the latencies; input captured during the restart lies just before that point.
+- **Theme split by the other agent (205ea08) does not change behaviour.** `m5-layout` run against 3795b74 (just before the split), 205ea08 and HEAD, from identical settings:
+  - 3795b74 against 205ea08: logs identical, both snapshots pixel identical. One run of 3795b74 differed in 324 pixels at the peak marker of the live input meter (room noise on the MacBook microphone); its next two runs matched 205ea08 exactly.
+  - 205ea08 against HEAD: logs identical. Pixels differ only in the record row, where M10b added the Monitor control and the latency.
+- Found on the way: the stored pre-roll was 1 s, a value from the M6 self-test (`set preroll 1`) that is not one of the picker's choices, so the pre-roll picker showed an empty label. Reset to the default, 10 s. The self-test scripts now restore settings after every run.

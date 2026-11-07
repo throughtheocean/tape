@@ -292,6 +292,12 @@ final class EditorController: ObservableObject {
         }
     }
 
+    /// Shuttle or reverse back to 1x forward from where playback is.
+    func playAtNormalSpeed() {
+        guard isPlaying, speed != 1 else { return }
+        startPlayback(from: playback.position, speed: 1)
+    }
+
     func stop() {
         guard isPlaying else { return }
         stopPlayback(at: playback.position)

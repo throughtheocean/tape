@@ -5,6 +5,7 @@ set monitorvolume 0
 set monitoring through
 wait 2
 latency
+snapshot /tmp/tape-m10b-through.png
 set monitoring off
 wait 1
 latency

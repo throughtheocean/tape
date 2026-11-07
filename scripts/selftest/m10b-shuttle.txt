@@ -1,0 +1,42 @@
+# M10b: R during shuttle snaps playback to 1x and records. Track 1 is muted, so nothing is heard.
+wait 1
+clicks /tmp/tape-m10b-clicks.wav 10 0.5
+import /tmp/tape-m10b-clicks.wav
+waitLoaded
+fit
+key cmd+shift+m
+key cmd+t
+header 1 click mute
+header 2 click body
+set device MacBook
+set preroll 1
+set monitoring off
+wait 2.5
+locate f48000
+key l
+key l
+wait 0.5
+log shuttle 2x
+key r
+wait 0.3
+log recording, back at 1x
+wait 1.5
+key r
+wait 1
+waitLoaded
+log after take, still playing at 1x
+latency
+key space
+locate f240000
+key j
+wait 0.5
+log reverse
+key r
+wait 1.5
+key r
+wait 1
+waitLoaded
+log after take from reverse
+latency
+key space
+quit

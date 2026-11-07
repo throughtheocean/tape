@@ -71,10 +71,11 @@ struct RecordRow: View {
             .help("Through plays the selected input on the output. Use headphones: with speakers and a microphone it feeds back.")
 
             if let ms = recorder.monitoringLatencyMs, recorder.device != nil {
-                Text(String(format: "%.1f ms", ms))
+                let through = settings.inputMonitoring == .through
+                Text(String(format: "%.1f ms", ms) + (through && recorder.monitorDevicesDiffer ? ", may click: different devices" : ""))
                     .font(.system(size: 11).monospacedDigit())
-                    .foregroundStyle(settings.inputMonitoring == .through ? Color.tapePrimary : Color.tapeSecondary)
-                    .help("Round trip from input to output: input latency and buffer, output buffer and latency")
+                    .foregroundStyle(through ? Color.tapePrimary : Color.tapeSecondary)
+                    .help("Round trip from input to output: input latency and buffer, output buffer and latency. With input and output on different devices, their clocks drift and the monitor can click now and then; the recording is not affected.")
             }
 
             if recorder.needsPermission {

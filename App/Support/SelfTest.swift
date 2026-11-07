@@ -236,7 +236,7 @@ final class SelfTest {
                      AppSettings.shared.inputMonitoring.rawValue))
         let out = r.engine.throughDevice.map { id in AudioDevices.name(id) ?? "\(id)" } ?? "none"
         if let e = r.inputError { write("input error: \(e)") }
-        write("through: \(r.engine.throughFrames) frames played on \(out), default output \(AudioDevices.defaultOutputDevice.flatMap { AudioDevices.name($0) } ?? "none")")
+        write("through: \(r.engine.throughFrames) frames played on \(out), default output \(AudioDevices.defaultOutputDevice.flatMap { AudioDevices.name($0) } ?? "none"), different devices \(r.monitorDevicesDiffer)")
         if let o = r.lastOverdub {
             write(String(format: "last overdub: render frame %lld at host %.6f, captured %.6f (stamped %@), minus input %.3f ms, output %.3f ms",
                          o.render.position, o.render.hostSeconds, o.captured, o.stamped ? "yes" : "no",

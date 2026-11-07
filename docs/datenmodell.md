@@ -43,3 +43,27 @@ The pan law is fixed. It is not a setting, per document or otherwise.
 ## Process previews
 
 Previews play the document's mix with the target regions swapped for processed copies, so region gain and fades, the track's gain and pan, mute, solo and the master all apply after the process, as after Apply. Processes rendered in Tape (Normalize, Gain and the others) render the copies into memory. The Compressor and Limiter run live: each target region plays through its own Audio Unit as it is read (`LiveAUSource`), in the same 4096 frame slices, with the same latency compensation and the same 2 ms edge crossfade for a partial range as Apply. There is no insert on the master.
+
+## Overdub placement
+
+An overdub is a recording made while playback runs. Its region starts at the timeline frame the player heard when the first live input frame reached the input. The input frames before it (pre-roll) are in the file, hidden before the region start.
+
+```
+position = renderFrame(at: captured - inputLatency - outputLatency)
+
+inputLatency  = kAudioDevicePropertyLatency + kAudioDevicePropertySafetyOffset + kAudioStreamPropertyLatency  (input device)
+outputLatency = the same three properties                                                                   (default output device)
+```
+
+- `captured` is the host time stamp the input tap gives the buffer holding the first live frame, plus that frame's offset in the buffer at the input rate.
+- `renderFrame(at:)` maps a host time to a timeline frame through the last buffer playback handed to the output: its first frame and host time (`PlaybackEngine.renderAnchor`), at 1x, in session frames.
+- The code is `Overdub.position` in TapeCore, tested in `OverdubTests`.
+
+Why it is exactly this, so that nobody "fixes" it:
+
+1. **The IO buffer size is not added.** The input stamp is the host time at which the buffer's first frame was at the device's IO cycle. Waiting for the buffer to fill is already behind that stamp. Adding the buffer (10.7 ms at 512 frames) puts every take one buffer early. The device's own latency, safety offset and stream latency are not in the stamp, so they are subtracted.
+2. **The output latency is subtracted.** The render anchor is the frame handed to the output unit, not the frame coming out of the speaker. The player hears it one output latency later. While singing at host time t, the player hears the frame rendered at t - outputLatency. Leaving it out places every take late by the output latency.
+3. **Playback's ring buffer ahead of the output does not matter.** The anchor is taken at the output callback, not at the producer that renders ahead.
+4. **Placement waits for a buffer at 1x.** Right after play starts, or after R snaps a shuttle back to 1x, there is no anchor yet; the placement is taken from the first buffer at 1x, a few ms later. Input frames from before that buffer land just before the point where 1x playback resumed.
+
+The check is the loopback test (`scripts/selftest/m10b-loopback.txt`): output fed back into the input, a click recorded against a played click lands within 1 ms. If a change to this formula makes that test worse, the change is wrong.
