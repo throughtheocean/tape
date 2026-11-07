@@ -63,6 +63,7 @@
 		673E0BA64A4334F7B01EBAF2 /* EditorController+Tracks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EditorController+Tracks.swift"; sourceTree = "<group>"; };
 		6C6E5C15D1404550C948BCF5 /* TimelineRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineRenderer.swift; sourceTree = "<group>"; };
 		6E4C33FC83E2C6915F8C1C3F /* EditorController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorController.swift; sourceTree = "<group>"; };
+		72747FEB6CCB0F98897DDE36 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		758B0F2C8BCA03D08FC49E71 /* Tape.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Tape.entitlements; sourceTree = "<group>"; };
 		7A90DF3CCB1321122D49F1C4 /* Theme+Tape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Theme+Tape.swift"; sourceTree = "<group>"; };
 		7CB692CA19EE450EA90C3C42 /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
@@ -190,6 +191,7 @@
 			children = (
 				E43A217D488DF323AA0EEEA3 /* AppDelegate.swift */,
 				4FCFBE893A13F42177DD57C6 /* Assets.xcassets */,
+				72747FEB6CCB0F98897DDE36 /* Debug.xcconfig */,
 				83A67B8D6E50859C24A6AE7B /* Info.plist */,
 				3B0B97B8EB63527C26C8D04B /* main.swift */,
 				5EB62817DE4B97642623DF54 /* MainMenu.swift */,
@@ -271,7 +273,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					518E2037129B0255833CF628 = {
-						DevelopmentTeam = "";
+						DevelopmentTeam = PRQ9CL3URA;
 						ProvisioningStyle = Manual;
 					};
 				};
@@ -389,13 +391,9 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CODE_SIGN_IDENTITY = "Apple Development: maik.bluhm@gmail.com (NAHQFX7L3R)";
-				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = "";
-				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -453,13 +451,9 @@
 				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				CODE_SIGN_IDENTITY = "Apple Development: maik.bluhm@gmail.com (NAHQFX7L3R)";
-				CODE_SIGN_STYLE = Manual;
 				COPY_PHASE_STRIP = NO;
 				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = "";
-				ENABLE_HARDENED_RUNTIME = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu11;
@@ -491,19 +485,23 @@
 		};
 		E63F0EB5D93201502DDA02E9 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 72747FEB6CCB0F98897DDE36 /* Debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/Tape.entitlements;
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = PRQ9CL3URA;
+				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.maikbluhm.tape;
+				MARKETING_VERSION = 0.10.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.runningoncliffs.tape;
 				PRODUCT_NAME = Tape;
 				SDKROOT = macosx;
 			};
@@ -514,16 +512,20 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/Tape.entitlements;
+				CODE_SIGN_IDENTITY = "Developer ID Application";
+				CODE_SIGN_STYLE = Manual;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = PRQ9CL3URA;
+				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = App/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.maikbluhm.tape;
+				MARKETING_VERSION = 0.10.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.runningoncliffs.tape;
 				PRODUCT_NAME = Tape;
 				SDKROOT = macosx;
 			};

@@ -3,6 +3,7 @@ import AppKit
 import HardwarePresets
 import TapeCore
 
+#if DEBUG
 /// Scripted UI run, started with `-TapeSelfTest <script>`. Drives the front window through its
 /// menu key equivalents and synthesized mouse events, logs state and renders snapshots offscreen,
 /// so the UI can be exercised while no display is available. A test harness, not a user feature.
@@ -807,3 +808,4 @@ final class SelfTest {
         write("snapshot \(path)")
     }
 }
+#endif

@@ -1,0 +1,5 @@
+// Debug signing. Ad hoc by default, so Debug builds and the self-test run without the Developer ID certificate.
+// Local.xcconfig (untracked, next to project.yml) may set a real identity, for example
+// CODE_SIGN_IDENTITY = Apple Development: Name (ID), which keeps the microphone grant across rebuilds.
+CODE_SIGN_IDENTITY = -
+#include? "../Local.xcconfig"

@@ -1139,3 +1139,40 @@ In the M10c regressions, the take in `m10b-overdub` landed at 93928 in one run a
 The latencies and the render anchor are the same in both runs. What differs is the moment the first live input frame was captured, relative to playback: 3.2 ms. The take begins with that frame, so its position has to differ by the same amount. That moment depends on where R fell in the input's 512 frame IO cycle, and on the phase between the MacBook microphone's cycle and the output device's cycle, which run on separate clocks and start independently each run. So the spread can be up to one input buffer (10.7 ms) and says nothing about accuracy. The harness compared positions of takes started at different moments, which is the wrong measure.
 
 Whether the placement itself is right can only be measured with sound that is in both the playback and the take: the loopback test (`scripts/selftest/m10b-loopback.txt`, see "Loopback test, for you" in M10b). It measures each click's offset in the take against the click in the timeline, so where R fell drops out. Its median decides the formula; the spread of its 20 offsets is the real placement jitter. It is still open.
+
+## M11: Release (signing, notarization, release script, icon)
+
+### State of Part A on this Mac
+
+Not done yet. `security find-identity -v -p codesigning` lists two Apple Development certificates and no Developer ID Application; `xcrun notarytool history --keychain-profile tape-notary` says the profile does not exist. Everything in Part B that does not need them is built and checked; the release run itself is yours.
+
+**Team ID:** the spec leaves `TEAMID` blank. I used `PRQ9CL3URA`, the team (OU) of your existing "Apple Development: maik.bluhm@gmail.com" certificate, in `project.yml` and `ExportOptions.plist`. If your Developer ID team shows a different ID under Membership details, those two lines change.
+
+### What changed
+
+- `project.yml`, target Tape: manual signing, team `PRQ9CL3URA`, hardened runtime on, bundle id `com.runningoncliffs.tape`, version 0.10.0 build 1, Release signs with "Developer ID Application". No sandbox. The one entitlement stays `com.apple.security.device.audio-input`; Tape hosts only Apple's own Audio Units (Compressor, Limiter), which library validation allows, so nothing else is needed.
+- `App/Info.plist`: the microphone text from the spec, `CFBundleIconName` AppIcon. The spec's `info:` block in `project.yml` would make xcodegen rewrite `Info.plist` from those properties alone and drop the document types (`.tape` packages, audio files); the keys went into the existing plist instead, same result.
+- Self-test harness: `SelfTest.swift` and its call sites in `AppDelegate` are inside `#if DEBUG`.
+- `ExportOptions.plist` and `scripts/release.sh` as in the spec. `docs/betrieb.md` with Release, Install on another Mac, Certificates. `build/` was already in `.gitignore`; `Local.xcconfig` added.
+- Icon: `App/Assets.xcassets/AppIcon.appiconset` is byte identical to `AppIcon-dark.appiconset` from the icon zip (`diff -r`), the catalog's `Contents.json` exists. Nothing to copy.
+- `scripts/selftest.sh` uses the new defaults domain, and restores settings correctly: `defaults import` merges, so keys a run added stayed behind before (an empty export also "succeeds"). It now clears the domain and imports the saved copy.
+
+### Tests and checks
+
+- `swift test`: 126 tests, 5 skipped, 0 failures.
+- Debug builds and the self-test runs (`m10c-magnetic`, `m10a-only-drop-overlap`: same states as before). Debug signs with your Apple Development identity through `Local.xcconfig`; with that file moved away it signs ad hoc (`Signature=adhoc`) and still builds.
+- Release as configured fails here with "No signing certificate "Developer ID Application" found", as it should without Part A. Built with `CODE_SIGN_IDENTITY=-` for the checks: `nm Tape.app/Contents/MacOS/Tape | grep -ci selftest` prints 0, and `strings` finds no "selftest" either. The Debug build has 160 such symbols.
+- Release Info.plist: `com.runningoncliffs.tape`, 0.10.0 (1), icon name AppIcon. The asset catalog holds the icon at 16 to 1024 pixels; rendered through the system icon service (as Finder and the Dock do) at 16, 32, 128 and 512 points it shows the dark Tape icon, no placeholder. Dock and About panel with the notarized build are part of your check on the second Mac.
+
+### Deviations, with reasons
+
+1. **Debug signing.** The spec sets `CODE_SIGN_IDENTITY: "-"` for Debug. Done, through `App/Debug.xcconfig`, which also includes an optional, untracked `Local.xcconfig`. Reason: an ad-hoc signature changes with every build, and macOS keys the microphone grant to it, so every rebuild would ask for the microphone again and stall the recording self-tests. On this Mac `Local.xcconfig` names your Apple Development identity; on a Mac without it, Debug is ad hoc as specified.
+2. **Info.plist keys set in the plist, not via xcodegen `info:`** (see above).
+3. **New bundle id means fresh settings and a new microphone prompt.** Settings now live in `com.runningoncliffs.tape`; the old ones in `com.maikbluhm.tape` are untouched. To carry them over once: `defaults export com.maikbluhm.tape - | defaults import com.runningoncliffs.tape -`. The document type keeps its id `com.maikbluhm.tape.project`, so existing `.tape` packages still open; changing it is not in the spec.
+4. **`release.sh` needs a clean tree, untracked files included.** Right now four untracked items of yours block it: `docs/261106-tape-icon-02.zip`, `docs/261106-tape-icon-02/`, `docs/261106-tape-m6-multitrack-cursor-prompt-01.md`, `docs/261106-tape-stand-01.md`. Commit them (the zip into `docs/assets/` as A3 says) or move them out before the first release.
+
+### For you
+
+1. Part A (certificate, `.p12`, `tape-notary` profile), and confirm the team ID.
+2. Clean the tree (deviation 4), then `scripts/release.sh`. Please send me the notarytool submission id and the `spctl` line for the report.
+3. The zip on a second Mac: no Gatekeeper dialog, microphone prompt on the first record, icon in Finder, Dock and About.

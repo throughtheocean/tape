@@ -14,11 +14,6 @@ settings:
     ARCHS: arm64
     ONLY_ACTIVE_ARCH: YES
     MACOSX_DEPLOYMENT_TARGET: "14.0"
-    # A real identity keeps the privacy (microphone) grant across rebuilds; ad-hoc signing changes it every build.
-    CODE_SIGN_IDENTITY: "Apple Development: maik.bluhm@gmail.com (NAHQFX7L3R)"
-    CODE_SIGN_STYLE: Manual
-    DEVELOPMENT_TEAM: ""
-    ENABLE_HARDENED_RUNTIME: NO
     DEAD_CODE_STRIPPING: YES
 targets:
   Tape:
@@ -31,13 +26,24 @@ targets:
         product: TapeCore
       - package: TapeCore
         product: HardwarePresets
+    # Debug signs ad hoc (CODE_SIGN_IDENTITY "-") so it builds without the Developer ID certificate. The xcconfig
+    # includes an optional, untracked Local.xcconfig that can name a real identity instead: an ad-hoc signature
+    # changes with every build, and macOS then asks for the microphone again.
+    configFiles:
+      Debug: App/Debug.xcconfig
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.maikbluhm.tape
+        CODE_SIGN_STYLE: Manual
+        DEVELOPMENT_TEAM: PRQ9CL3URA
+        ENABLE_HARDENED_RUNTIME: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.runningoncliffs.tape
+        MARKETING_VERSION: 0.10.0
+        CURRENT_PROJECT_VERSION: 1
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_NAME: Tape
         INFOPLIST_FILE: App/Info.plist
         CODE_SIGN_ENTITLEMENTS: App/Tape.entitlements
-        MARKETING_VERSION: "0.1"
-        CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      configs:
+        Release:
+          CODE_SIGN_IDENTITY: "Developer ID Application"
