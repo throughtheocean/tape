@@ -216,7 +216,7 @@ final class FlippedView: NSView {
     override var isFlipped: Bool { true }
 }
 
-/// One track's header: swatch, name, mute, solo, gain, pan and a thin peak meter on the right edge.
+/// One track's header: swatch, name, magnetic, mute, solo, gain, pan and a thin peak meter on the right edge.
 @MainActor
 final class TrackHeaderView: NSView, NSTextFieldDelegate {
     struct State: Equatable {
@@ -257,7 +257,7 @@ final class TrackHeaderView: NSView, NSTextFieldDelegate {
     }
 
     private struct Zones {
-        var swatch, name, mute, solo, gain, gainText, pan, panText, meter: NSRect
+        var swatch, name, magnet, mute, solo, gain, gainText, pan, panText, meter: NSRect
     }
 
     private var zones: Zones {
@@ -266,9 +266,10 @@ final class TrackHeaderView: NSView, NSTextFieldDelegate {
         let r2: CGFloat = bounds.height >= 60 ? 30 : 22
         let solo = NSRect(x: w - 28, y: r1, width: 18, height: 15)
         let mute = NSRect(x: w - 48, y: r1, width: 18, height: 15)
+        let magnet = NSRect(x: w - 68, y: r1, width: 18, height: 15)
         return Zones(swatch: NSRect(x: 8, y: r1 + 3, width: 9, height: 9),
-                     name: NSRect(x: 22, y: r1, width: mute.minX - 26, height: 15),
-                     mute: mute, solo: solo,
+                     name: NSRect(x: 22, y: r1, width: magnet.minX - 26, height: 15),
+                     magnet: magnet, mute: mute, solo: solo,
                      gain: NSRect(x: 4, y: r2, width: 68, height: 15),
                      gainText: NSRect(x: 72, y: r2, width: 32, height: 15),
                      pan: NSRect(x: 106, y: r2, width: 38, height: 15),
@@ -294,6 +295,11 @@ final class TrackHeaderView: NSView, NSTextFieldDelegate {
             HeaderDrawing.text(s.track.name, in: z.name, size: 12, color: s.silenced ? Theme.secondaryText : Theme.primaryText,
                                weight: .medium, mono: false)
         }
+        (s.track.magnetic ? Theme.accent : NSColor(white: 1, alpha: 0.08)).setFill()
+        NSBezierPath(roundedRect: z.magnet, xRadius: 3, yRadius: 3).fill()
+        MagnetIcon.image(size: 10, on: s.track.magnetic)
+            .draw(in: NSRect(x: z.magnet.midX - 5, y: z.magnet.midY - 5, width: 10, height: 10), from: .zero,
+                  operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
         HeaderDrawing.toggle(z.mute, "M", on: s.track.mute, color: NSColor(hex: 0xE8913A))
         HeaderDrawing.toggle(z.solo, "S", on: s.track.solo, color: NSColor(hex: 0xD9C44A))
         HeaderDrawing.slider(z.gain, position: Fader.position(dB: s.track.gainDB), color: color, centered: false,
@@ -311,6 +317,7 @@ final class TrackHeaderView: NSView, NSTextFieldDelegate {
         switch zone {
         case "name": rect = z.name
         case "swatch": rect = z.swatch
+        case "magnet": rect = z.magnet
         case "mute": rect = z.mute
         case "solo": rect = z.solo
         case "gain": rect = z.gain
@@ -331,7 +338,9 @@ final class TrackHeaderView: NSView, NSTextFieldDelegate {
         guard let track = editor.project.track(trackID) else { return }
         editor.selectTrack(trackID, header: true)
         if nameField == nil, window?.firstResponder is NSTextView { window?.makeFirstResponder(nil) }
-        if z.mute.insetBy(dx: -2, dy: -3).contains(p) {
+        if z.magnet.insetBy(dx: -1, dy: -3).contains(p) {
+            editor.toggleMagnetic(trackID)
+        } else if z.mute.insetBy(dx: -2, dy: -3).contains(p) {
             editor.updateTrack(track.mute ? "Unmute" : "Mute", trackID) { $0.mute.toggle() }
         } else if z.solo.insetBy(dx: -2, dy: -3).contains(p) {
             editor.updateTrack(track.solo ? "Unsolo" : "Solo", trackID) { $0.solo.toggle() }

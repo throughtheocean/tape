@@ -31,6 +31,7 @@
 		991392AD8572BDD8BFD25669 /* TrackInspector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80BA9C483C0A752146EB7098 /* TrackInspector.swift */; };
 		9B95D4A36B544DA2DDEFCD0B /* SelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = C32BD636D5C7DA0595E10C3F /* SelfTest.swift */; };
 		A87396E038103BA1495C40A3 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48E068AC01D2C3FDC47FE76D /* Theme.swift */; };
+		AE65363F7D6498DDDF072998 /* MagnetIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 223606CE2CF74F5D5D354D7C /* MagnetIcon.swift */; };
 		B15AF3F27745C0A2A9DB0F14 /* ProcessSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E61EAC9D5F540A45ECD293DA /* ProcessSheet.swift */; };
 		BA879C266495C130A230355A /* EditorController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E4C33FC83E2C6915F8C1C3F /* EditorController.swift */; };
 		CF8985869AB527F5DBEB4392 /* TrackHeaders.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB7B6A6AAF3534114573439C /* TrackHeaders.swift */; };
@@ -50,6 +51,7 @@
 		097E061F1D5376DA631D28B4 /* EditorController+Edit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "EditorController+Edit.swift"; sourceTree = "<group>"; };
 		1B0EAA73E0D4806827A756D0 /* RecordRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordRow.swift; sourceTree = "<group>"; };
 		209DCECA2D72E3B6C0D601A7 /* TapeCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = TapeCore; path = TapeCore; sourceTree = SOURCE_ROOT; };
+		223606CE2CF74F5D5D354D7C /* MagnetIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MagnetIcon.swift; sourceTree = "<group>"; };
 		314F43268D44A239651F929E /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
 		3837FBB61B2023113976DFF6 /* TimeFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeFormat.swift; sourceTree = "<group>"; };
 		3B0B97B8EB63527C26C8D04B /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
@@ -123,6 +125,7 @@
 			children = (
 				A973D8F2201B19458E321BDB /* AppSettings.swift */,
 				B6E6CC35575F8BC4EA331E2F /* Benchmark.swift */,
+				223606CE2CF74F5D5D354D7C /* MagnetIcon.swift */,
 				C32BD636D5C7DA0595E10C3F /* SelfTest.swift */,
 				48E068AC01D2C3FDC47FE76D /* Theme.swift */,
 				7A90DF3CCB1321122D49F1C4 /* Theme+Tape.swift */,
@@ -323,6 +326,7 @@
 				FC08085114D7CC77C9B58324 /* FileDropView.swift in Sources */,
 				297E4B5A7C85271E55869AC3 /* InspectorPanel.swift in Sources */,
 				075616A34081AE7E472322DA /* LoudnessMeterView.swift in Sources */,
+				AE65363F7D6498DDDF072998 /* MagnetIcon.swift in Sources */,
 				322B1BB7B723FB52F7E89611 /* MainMenu.swift in Sources */,
 				F5FA68136B342E6D25633B48 /* MainWindowController.swift in Sources */,
 				9177290C0DB1B1CEDB22B8C6 /* ProcessSession.swift in Sources */,

@@ -9,9 +9,11 @@ public enum EditOperations {
 
     /// Splits every region (or only `ids`) that strictly contains one of `frames`.
     /// The left part keeps the fade in, the right part keeps the fade out. Returns the ids of the new right parts.
+    /// Regions connected to a split region at or after the cut move their connection to the right part.
     @discardableResult
     public static func blade(_ project: inout Project, at frames: [Int64], only ids: Set<UUID>? = nil) -> [UUID] {
         var created: [UUID] = []
+        var splits: [(left: UUID, right: UUID, frame: Int64)] = []
         for frame in Set(frames).sorted() {
             var next: [Region] = []
             for region in project.regions {
@@ -34,8 +36,16 @@ public enum EditOperations {
                 next.append(left)
                 next.append(right)
                 created.append(right.id)
+                splits.append((region.id, right.id, frame))
             }
             project.regions = next
+        }
+        for split in splits {
+            for i in project.regions.indices {
+                guard let anchor = project.regions[i].anchor, anchor.regionId == split.left,
+                      project.regions[i].position >= split.frame else { continue }
+                project.regions[i].anchor = Anchor(regionId: split.right, offset: project.regions[i].position - split.frame)
+            }
         }
         project.sortRegions()
         return created
@@ -138,7 +148,8 @@ public enum EditOperations {
     }
 
     /// Puts `regions` on `track` one after another from `start` (a file drop over a lane). With `overwrite` they
-    /// cover what lies under them, else they overlap and sum. Returns their ids.
+    /// cover what lies under them, else they overlap and sum. On a magnetic track they are inserted into the
+    /// sequence at `start` instead. Returns their ids.
     @discardableResult
     public static func place(_ project: inout Project, _ regions: [Region], track: UUID, at start: Int64, overwrite: Bool) -> [UUID] {
         var position = max(0, start)
@@ -151,7 +162,11 @@ public enum EditOperations {
             ids.append(r.id)
         }
         project.sortRegions()
-        if overwrite { self.overwrite(&project, by: Set(ids)) }
+        if isMagnetic(project, track) {
+            insert(&project, ids: Set(ids), track: track)
+        } else if overwrite {
+            self.overwrite(&project, by: Set(ids))
+        }
         return ids
     }
 
@@ -178,15 +193,17 @@ public enum EditOperations {
     }
 
     /// Moves the region's start to `frame` (timeline), keeping its end; limited by the source start
-    /// and the minimum length. Fades shrink to fit.
+    /// and the minimum length. Fades shrink to fit. On a magnetic track the start stays where it is and the
+    /// region gets shorter or longer at the front; `settle` then shifts what follows.
     public static func trimStart(_ project: inout Project, id: UUID, to frame: Int64) {
         guard let i = project.regions.firstIndex(where: { $0.id == id }) else { return }
         var r = project.regions[i]
+        let magnetic = isMagnetic(project, r.trackId)
         let earliest = r.position - r.sourceIn
         let latest = r.end - minimumLength
-        let target = min(max(frame, earliest, 0), latest)
+        let target = min(max(frame, earliest, magnetic ? earliest : 0), latest)
         let delta = target - r.position
-        r.position += delta
+        if !magnetic { r.position += delta }
         r.sourceIn += delta
         fitFades(&r)
         project.regions[i] = r

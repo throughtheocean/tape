@@ -34,11 +34,22 @@ extension EditorController {
         document.apply("Blade") { EditOperations.blade(&$0, at: [frame], only: [id]) }
     }
 
+    /// Delete ripples. Forward Delete leaves a gap: on a magnetic track a gap region of the same length takes
+    /// the region's place, elsewhere the region goes and the time stays empty.
     func deleteSelection(ripple: Bool) {
         let ids = selectedIDs
         guard !ids.isEmpty else { return }
-        document.apply(ripple ? "Delete" : "Delete Leaving Gap") { EditOperations.delete(&$0, ids: ids, ripple: ripple) }
-        selection = []
+        if ripple {
+            document.apply("Delete") { EditOperations.delete(&$0, ids: ids, ripple: true) }
+            selection = []
+            return
+        }
+        let magnetic = Set(project.regions.filter { ids.contains($0.id) && project.track($0.trackId)?.magnetic == true }.map(\.id))
+        document.apply(magnetic.isEmpty ? "Delete Leaving Gap" : "Replace with Gap") { p in
+            EditOperations.replaceWithGap(&p, ids: magnetic)
+            EditOperations.delete(&p, ids: ids.subtracting(magnetic), ripple: false)
+        }
+        selection = magnetic
     }
 
     func duplicateSelection() {

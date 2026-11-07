@@ -36,6 +36,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             self?.showError(message)
         }.store(in: &subscriptions)
         editor.focusRegionName.sink { [weak self] in self?.revealInspector() }.store(in: &subscriptions)
+        editor.confirm = { [weak self] message, info, button, action in self?.confirm(message, info, button, action) }
         tapeDocument.objectWillChange.sink { [weak self] in
             DispatchQueue.main.async { self?.updateTitle() }
         }.store(in: &subscriptions)
@@ -480,6 +481,23 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         }
     }
 
+    /// A sheet with `button` and Cancel; `action` runs on `button`.
+    func confirm(_ message: String, _ info: String, _ button: String, _ action: @escaping () -> Void) {
+        guard let window else { return }
+        let alert = NSAlert()
+        alert.messageText = message
+        alert.informativeText = info
+        alert.addButton(withTitle: button)
+        alert.addButton(withTitle: "Cancel")
+        openAlert = alert
+        alert.beginSheetModal(for: window) { response in
+            MainActor.assumeIsolated {
+                self.openAlert = nil
+                if response == .alertFirstButtonReturn { action() }
+            }
+        }
+    }
+
     /// Shows the inspector if hidden, for double click on a region.
     func revealInspector() {
         setInspectorVisible(true)
@@ -489,6 +507,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
 
     @objc func toggleMultitrack(_ sender: Any?) { editor.multitrack.toggle() }
     @objc func toggleOnlyTrack(_ sender: Any?) { editor.onlyTrack.toggle() }
+    @objc func toggleMagnetic(_ sender: Any?) { editor.toggleMagnetic(editor.selectedTrackID) }
     @objc func addTrack(_ sender: Any?) { editor.addTrack() }
     @objc func cycleLaneHeight(_ sender: Any?) { editor.cycleLaneHeight() }
     @objc func selectPreviousTrack(_ sender: Any?) { editor.selectAdjacentTrack(by: -1) }
@@ -569,6 +588,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         case #selector(toggleMultitrack(_:)):
             item.state = editor.multitrack ? .on : .off
             return true
+        case #selector(toggleMagnetic(_:)):
+            item.state = editor.selectedTrack.magnetic ? .on : .off
+            return window?.attachedSheet == nil
         case #selector(addTrack(_:)):
             return !RecordController.shared.isRecording
         case #selector(selectPreviousTrack(_:)):

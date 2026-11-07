@@ -665,7 +665,12 @@ final class SelfTest {
         write(s)
         for (i, r) in d.project.regions.enumerated() {
             let sel = e.selection.contains(r.id) ? "*" : " "
-            let track = d.project.tracks.count > 1 ? " track \((d.project.trackIndex(r.trackId) ?? -1) + 1)" : ""
+            var track = d.project.tracks.count > 1 ? " track \((d.project.trackIndex(r.trackId) ?? -1) + 1)" : ""
+            if r.isGap { track += " gap" }
+            if let a = r.anchor {
+                let name = d.project.regions.first { $0.id == a.regionId }?.name ?? "?"
+                track += " anchor '\(name)' \(a.offset >= 0 ? "+" : "")\(a.offset)"
+            }
             write(String(format: "  %@%d %@ pos %lld len %lld in %lld out %lld gain %.2f fadeIn %lld %@ %.2f fadeOut %lld %@ %.2f",
                          sel, i, r.name, r.position, r.length, r.sourceIn, r.sourceOut, r.gainDB,
                          r.fadeIn.length, r.fadeIn.shape.rawValue, r.fadeIn.blend, r.fadeOut.length, r.fadeOut.shape.rawValue, r.fadeOut.blend)
@@ -684,7 +689,7 @@ final class SelfTest {
             let lane = e.lane(for: t.id).map { String(format: "%.0f+%.0f", $0.top, $0.height) } ?? "hidden"
             write(String(format: "  T%d %@ color %d gain %.2f pan %.2f mute %@ solo %@ regions %d lane %@",
                          i + 1, t.name, t.color, t.gainDB, t.pan, t.mute ? "true" : "false", t.solo ? "true" : "false",
-                         d.project.regions(onTrack: t.id).count, lane))
+                         d.project.regions(onTrack: t.id).count, lane) + (t.magnetic ? " magnetic" : ""))
         }
     }
 

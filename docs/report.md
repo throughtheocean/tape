@@ -1058,3 +1058,58 @@ I do not play audio here, so the 1 ms check is yours. `scripts/selftest/m10b-loo
   - 3795b74 against 205ea08: logs identical, both snapshots pixel identical. One run of 3795b74 differed in 324 pixels at the peak marker of the live input meter (room noise on the MacBook microphone); its next two runs matched 205ea08 exactly.
   - 205ea08 against HEAD: logs identical. Pixels differ only in the record row, where M10b added the Monitor control and the latency.
 - Found on the way: the stored pre-roll was 1 s, a value from the M6 self-test (`set preroll 1`) that is not one of the picker's choices, so the pre-roll picker showed an empty label. Reset to the default, 10 s. The self-test scripts now restore settings after every run.
+
+## M10c: Magnetic tracks and connected regions
+
+### What it does
+
+- **Magnetic per track.** A magnet button in every track header (left of M and S), the same button in the transport next to "Only" in single view, Track > Magnetic, Shift Command G for the selected track. On closes the gaps in one undo step ("Close Gaps"); off keeps every position ("Magnetic Off").
+- **No gaps, drag reorders.** On a magnetic track the dragged region slides between its neighbours: as soon as its start passes the middle of a neighbour, the neighbour moves to the other side, and a light accent line marks where it will land. Dragging past the last region appends. Dragged to another lane, it leaves the sequence and the rest closes up. The hint reads "Insert".
+- **Ripple.** Trimming either edge shifts everything after it, together with the regions connected to them. Blade leaves no gap. Delete ripples. Forward Delete replaces the region with a gap region of the same length ("Replace with Gap"), drawn as an empty frame labelled "Gap"; it trims, moves and deletes like a region and is silent.
+- **Drop and record.** A drop onto a magnetic lane, and a take recorded onto a magnetic track, are inserted by their position like a drag.
+- **Connected regions.** Option Command drag of a region on a free track onto a region on a magnetic track connects them: the target is outlined while dragging, the hint reads "Connect to <name>", the region keeps the time it was dragged to and stays on its own lane. The Inspector has a "Connected" row with "Connect to..." (the 20 nearest regions on magnetic tracks) and "Disconnect". In multitrack a thin line in the track's colour runs from the connected region's top left into its anchor, ending in a small square.
+- A connected region follows its anchor wherever the anchor goes (ripple, reorder, the anchor dragged). Its gain, fades, track and length stay its own; trimming it does not touch the anchor. Deleting the anchor disconnects it in place.
+- **Making a track with connected regions magnetic** asks first: "Make Track 2 magnetic?", "Its 1 connected region will be disconnected and keep its position. Then its gaps close. You can undo this." with "Make Magnetic" and "Cancel".
+- Fades, gain, the processes, export and the renderer see an ordinary track. The file stores every position as before; `magnetic` and `anchor` are only written when set. The rules are in `docs/datenmodell.md`, "Magnetic tracks and connected regions".
+
+### Tests
+
+125 TapeCore tests, 5 skipped, 0 failures. New, `MagneticTests`:
+
+- Closing gaps keeps order and lengths.
+- Reorder by drag: a region dragged to the front, between two others and past the end gives the expected sequence, and its connected regions travel with it.
+- Ripple trim: a's end 400 shorter moves b, c and the regions connected to b and c exactly 400 left; b's start 250 later moves what follows by 250 and leaves x (connected to b) where it is; extending moves everything 300 right; trimming a connected region leaves the anchor alone.
+- Deleting the anchor disconnects and keeps the absolute position, while a region connected to a later anchor moves with the ripple.
+- Replace with gap keeps the sequence and the connection; a gap trims both ways and ripples.
+- Blade moves connections after the cut to the right part.
+- Connection rules: only free to magnetic, a moved connected region keeps its new place with a new offset, Magnetic Off keeps connections, no chains, making the connected track magnetic disconnects.
+- A drop onto a magnetic track inserts.
+- A magnetic track renders sample identical to the same regions on a free track (fade, gain, a gap in the middle, which is silent).
+- The file keeps `magnetic` and anchors, and a file without them reads as before.
+
+### Tested by hand
+
+`scripts/selftest/m10c-magnetic.txt` (silent, no audio), track 1 with a (4 s), b (3 s), a with gaps, x (3 s) on track 2:
+
+- Magnet button on track 1: a 0, b 192000, a 336000, undo "Close Gaps". x unmoved.
+- Option Command drag of x onto b: b outlined, "Connect to tape-m6-b"; on release x is connected with offset +58000, undo "Connect".
+- Trim of a's end 48000 shorter: b, the second a and x all moved 48000 left.
+- b dragged to the front: the others slid apart while dragging, b landed at 0, x followed to 58000. The first a dragged past the middle of the second: the insertion line sat at 336000, where it landed.
+- Forward Delete on b: a gap region of 144000 at 0, x stays connected to it. Delete on b instead: rippled, x disconnected at 58000. Undo brings b and the connection back.
+- A drop at 150000 on the magnetic lane went between b and a at 144000.
+- Magnet on track 2 (which holds x): the sheet asked, Cancel changed nothing, "Make Magnetic" disconnected x and moved it to 0.
+- Single view: the transport button shows the state, Shift Command G turned track 1 off and kept every position and the connection.
+- Screenshots looked at: the connect drag, the connector line, both reorder drags, the gap, single view, the Inspector's "Connected" row.
+- Regressions against M10b (633fdc0), built side by side: `m10a-only-drop-overlap` identical; `m6-multitrack` identical; `m6-record` and `m10b-overdub` identical except the take's position, which differs by up to 155 frames between any two runs of the same build.
+- Debug and Release build.
+
+### Deviations, with reasons
+
+1. **The magnet is drawn, not an SF Symbol.** SF Symbols has no magnet (checked on this Mac, macOS 26). It is a small horseshoe drawn in code (`MagnetIcon`).
+2. **A magnetic sequence starts at 0.** The spec says regions follow each other; it does not say where the first starts. Starting at 0 makes position fully derived. Proposal: keep.
+3. **The insertion point is shown by the slot opening live plus an accent line**, rather than a line alone while the region hangs at the mouse. It is the same thing FCP does with the primary storyline, and the line marks the landing place.
+4. **Connected region during an Option Command drag stays on its own lane** and moves only in time. The spec says "onto the anchor region"; since connected regions must be on a free track, dropping it onto the magnetic lane would move it there. The target is the region under the mouse in any lane.
+5. **Magnetic Off keeps connections.** The spec does not say. Keeping them means off and on again loses nothing; the connection still follows its anchor while the track is free. Connections do not chain (a region others connect to cannot be connected), so following is always one step.
+6. **Nudge (comma, period) on a magnetic track** only reorders, like a drag: a nudge that does not carry the region past a neighbour's middle changes nothing, since the position is derived. Connected regions nudge as before.
+7. **Connector lines are drawn in multitrack only.** In single view only one lane is visible, so there is nothing to connect to on screen.
+8. **Gap regions use a reserved source id.** An older Tape build opening such a document would show the gap as a region with a missing source (silent, as now). Documents without gaps are unchanged.

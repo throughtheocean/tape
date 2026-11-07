@@ -78,6 +78,8 @@ enum MainMenu {
         item(track, "Select Previous Track", #selector(MainWindowController.selectPreviousTrack(_:)), key(NSUpArrowFunctionKey), [])
         item(track, "Select Next Track", #selector(MainWindowController.selectNextTrack(_:)), key(NSDownArrowFunctionKey), [])
         track.addItem(.separator())
+        item(track, "Magnetic", #selector(MainWindowController.toggleMagnetic(_:)), "g", [.command, .shift])
+        track.addItem(.separator())
         item(track, "Lane Height", #selector(MainWindowController.cycleLaneHeight(_:)), "")
         item(track, "Expand Selected Track", #selector(MainWindowController.toggleExpandTrack(_:)), "")
 

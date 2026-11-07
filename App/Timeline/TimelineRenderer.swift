@@ -311,6 +311,16 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
                 let a = max(x0, -2), b = min(x1, w + 2)
                 let width = max(b - a, 1)
                 let selected = selection.contains(region.id)
+                if region.isGap {
+                    // A gap: an empty frame, no waveform.
+                    let edge: SIMD4<Float> = selected ? [1, 1, 1, 0.9] : [1, 1, 1, 0.22]
+                    rects.append(RectInstance(rect: [a, top, width, bottom - top], color: [1, 1, 1, selected ? 0.06 : 0.025]))
+                    rects.append(RectInstance(rect: [a, top, width, 1], color: edge))
+                    rects.append(RectInstance(rect: [a, bottom - 1, width, 1], color: edge))
+                    if x0 >= -1 { rects.append(RectInstance(rect: [x0, top, 1, bottom - top], color: edge)) }
+                    if x1 <= w + 1 { rects.append(RectInstance(rect: [x1 - 1, top, 1, bottom - top], color: edge)) }
+                    continue
+                }
                 let edge = selected ? SIMD4<Float>(1, 1, 1, 0.9) : edge0
                 rects.append(RectInstance(rect: [a, top, width, bottom - top], color: selected ? body1 : body0))
                 rects.append(RectInstance(rect: [a, top, width, strip], color: selected ? strip1 : strip0))
@@ -361,6 +371,7 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
         }
 
         buildFades(editor, lanes: byTrack, size: size, scale: scale)
+        buildConnections(editor, lanes: byTrack, size: size, scale: scale)
 
         if let band = editor.pointer.rubberBand {
             let viewport = editor.laneViewport
@@ -384,6 +395,47 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
             let x = px(editor, frame: Double(edge.start ? r.position : r.end), scale: scale)
             let x0 = edge.start ? x : x - 3 * s
             rects.append(RectInstance(rect: [x0, top, 3 * s, bottom - top], color: [1, 0.85, 0.3, 0.9]))
+        }
+    }
+
+    /// Connector lines from connected regions to their anchors, the insertion point of a drag on a magnetic track
+    /// and the region an Option Command drag would connect to. Connectors need both lanes, so multitrack only.
+    private func buildConnections(_ editor: EditorController, lanes: [UUID: Lane], size: CGSize, scale: CGFloat) {
+        let w = Float(size.width), s = Float(scale)
+        let project = editor.document.project
+        if editor.multitrack {
+            let anchors = Set(project.regions.compactMap(\.anchor?.regionId))
+            var byID: [UUID: Region] = [:]
+            for r in project.regions where anchors.contains(r.id) { byID[r.id] = r }
+            for r in project.regions {
+                guard let anchor = r.anchor, let a = byID[anchor.regionId], let lane = lanes[r.trackId],
+                      let anchorLane = lanes[a.trackId] else { continue }
+                let x = px(editor, frame: Double(r.position), scale: scale).rounded()
+                if x < -2 || x > w + 2 { continue }
+                let color = Theme.trackColor(lane.track.color).withAlphaComponent(0.9).rgba
+                // Lanes sit next to each other, so the line reaches into both regions to stay visible.
+                let up = anchorLane.top < lane.top
+                let reach: Float = up ? 10 * s : -10 * s
+                let from = Float(up ? lane.bodyTop : lane.bodyBottom) * s + reach
+                let to = Float(up ? anchorLane.bodyBottom : anchorLane.bodyTop) * s - reach
+                rects.append(RectInstance(rect: [x, min(from, to), 1.5 * s, abs(to - from)], color: color))
+                rects.append(RectInstance(rect: [x - 2 * s, to - 2.75 * s, 5.5 * s, 5.5 * s], color: color))
+            }
+        }
+        if let insertion = editor.pointer.insertion, let lane = lanes[insertion.track] {
+            let x = px(editor, frame: Double(insertion.frame), scale: scale).rounded()
+            let top = Float(lane.bodyTop) * s, bottom = Float(lane.bodyBottom) * s
+            let color = Theme.accent.blended(withFraction: 0.5, of: .white)!.rgba
+            rects.append(RectInstance(rect: [x - 1.5 * s, top - 4 * s, 3 * s, bottom - top + 8 * s], color: color))
+        }
+        if let id = editor.pointer.connectTarget, let r = project.regions.first(where: { $0.id == id }), let lane = lanes[r.trackId] {
+            let x0 = px(editor, frame: Double(r.position), scale: scale), x1 = px(editor, frame: Double(r.end), scale: scale)
+            let top = Float(lane.bodyTop) * s, bottom = Float(lane.bodyBottom) * s
+            let c = Theme.accent.rgba
+            for rect in [SIMD4<Float>(x0, top, x1 - x0, 2 * s), SIMD4<Float>(x0, bottom - 2 * s, x1 - x0, 2 * s),
+                         SIMD4<Float>(x0, top, 2 * s, bottom - top), SIMD4<Float>(x1 - 2 * s, top, 2 * s, bottom - top)] {
+                rects.append(RectInstance(rect: rect, color: c))
+            }
         }
     }
 

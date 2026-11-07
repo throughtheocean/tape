@@ -179,6 +179,38 @@ extension EditorController {
         document.apply(name) { EditOperations.updateTrack(&$0, id: id, change) }
     }
 
+    // MARK: Magnetic and connected
+
+    /// Magnetic on closes the track's gaps; it asks first when the track holds connected regions, which it disconnects.
+    func toggleMagnetic(_ id: UUID) {
+        guard let track = project.track(id) else { return }
+        let set: () -> Void = { [weak self] in
+            self?.document.apply(track.magnetic ? "Magnetic Off" : "Close Gaps") {
+                EditOperations.setMagnetic(&$0, track: id, on: !track.magnetic)
+            }
+        }
+        let connected = EditOperations.connectedRegions(project, onTrack: id).count
+        guard !track.magnetic, connected > 0, let confirm else {
+            set()
+            return
+        }
+        confirm("Make \(track.name) magnetic?",
+                "Its \(connected) connected region\(connected == 1 ? "" : "s") will be disconnected and keep \(connected == 1 ? "its" : "their") "
+                + "position. Then its gaps close. You can undo this.", "Make Magnetic", set)
+    }
+
+    /// Connects `id` to the region `anchor` on a magnetic track. Returns false when the pair does not qualify.
+    @discardableResult
+    func connect(_ id: UUID, to anchor: UUID) -> Bool {
+        var done = false
+        document.apply("Connect") { done = EditOperations.connect(&$0, id: id, to: anchor) }
+        return done
+    }
+
+    func disconnect(_ ids: Set<UUID>) {
+        document.apply("Disconnect") { EditOperations.disconnect(&$0, ids: ids) }
+    }
+
     func renameTrack(_ id: UUID, to name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }

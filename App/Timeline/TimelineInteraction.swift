@@ -182,7 +182,7 @@ extension TimelineMetalView {
             beginGesture()
             drag = .trim(id: r.id, start: start)
         case let .body(r):
-            if flags.contains(.command) {
+            if flags.contains(.command), !flags.contains(.option) {
                 editor.selection.formSymmetricDifference([r.id])
                 return
             }
@@ -230,6 +230,11 @@ extension TimelineMetalView {
             guard abs(Double(p.x) - downX) >= 3 || lanes else { return }
             beginGesture()
             let ids = editor.selectedIDs
+            if flags.contains(.option), flags.contains(.command) {
+                drag = .connect(ids: ids, downFrame: downFrame)
+                mouseDragged(with: event)
+                return
+            }
             let copies = flags.contains(.option) ? Dictionary(uniqueKeysWithValues: ids.map { ($0, UUID()) }) : nil
             drag = .move(ids: ids, downFrame: downFrame, downLane: editor.lane(atY: downY)?.index ?? 0, copies: copies)
             if let copies { editor.selection = Set(copies.values) }
@@ -240,21 +245,40 @@ extension TimelineMetalView {
             let laneDelta = editor.multitrack ? (editor.lane(atY: Double(p.y), clamped: true)?.index ?? downLane) - downLane : 0
             var applied: Int64 = 0
             var lanes = 0
+            var insertion: EditorController.PointerOverlay.Insertion?
             let moving = copies.map { Set($0.values) } ?? ids
             doc.updateGesture { project in
                 if let copies { EditOperations.copy(&project, ids: ids, newIDs: copies) }
                 applied = EditOperations.move(&project, ids: moving, by: delta)
                 lanes = EditOperations.moveToTrack(&project, ids: moving, byLanes: laneDelta)
                 // A plain move covers what lies under it on its track; an Option drag keeps both and they sum.
-                if copies == nil { EditOperations.overwrite(&project, by: moving, pieceID: pieceID) }
+                // On a magnetic track the regions go in between their neighbours instead, which slide apart.
+                let magnetic = Set(project.tracks.filter(\.magnetic).map(\.id))
+                let free = Set(project.regions.filter { moving.contains($0.id) && !magnetic.contains($0.trackId) }.map(\.id))
+                if copies == nil { EditOperations.overwrite(&project, by: free, pieceID: pieceID) }
+                for track in magnetic {
+                    let here = Set(project.regions.filter { $0.trackId == track && moving.contains($0.id) }.map(\.id))
+                    if !here.isEmpty, let frame = EditOperations.insert(&project, ids: here, track: track) {
+                        insertion = .init(track: track, frame: frame)
+                    }
+                }
             }
+            editor.pointer.insertion = insertion
             let verb = copies == nil ? "" : "Copy "
-            if lanes != 0, let id = moving.first, let r = editor.project.regions.first(where: { $0.id == id }),
-               let t = editor.project.track(r.trackId) {
-                hint("\(verb)\(editor.durationText(applied))  \(t.name)", at: p)
+            let target = moving.first.flatMap { id in editor.project.regions.first { $0.id == id } }.flatMap { editor.project.track($0.trackId) }
+            if insertion != nil {
+                hint("\(verb)Insert\(lanes != 0 ? "  \(target?.name ?? "")" : "")", at: p)
+            } else if lanes != 0, let target {
+                hint("\(verb)\(editor.durationText(applied))  \(target.name)", at: p)
             } else {
                 hint(verb + editor.durationText(applied), at: p)
             }
+        case let .connect(ids, downFrame):
+            let delta = frame - downFrame
+            doc.updateGesture { EditOperations.move(&$0, ids: ids, by: delta) }
+            let target = connectTarget(at: p, excluding: ids)
+            editor.pointer.connectTarget = target?.id
+            hint(target.map { "Connect to \($0.name)" } ?? "Release over a region on a magnetic track", at: p)
         case let .trim(id, start):
             guard let r = gestureBase.regions.first(where: { $0.id == id }) else { return }
             let edge = editor.snapEdge(frame, excluding: [id], region: r, zeroCrossing: !flags.contains(.command))
@@ -313,7 +337,7 @@ extension TimelineMetalView {
     /// Scrolls the view while dragging past either side.
     private func autoscroll(_ p: CGPoint) {
         switch drag {
-        case .move, .trim, .mark, .rubber, .fade: break
+        case .move, .connect, .trim, .mark, .rubber, .fade: break
         default: return
         }
         if p.x < 0 { editor.scroll(byPoints: Double(p.x) / 4) }
@@ -346,6 +370,18 @@ extension TimelineMetalView {
             editor.selection = [id]
             editor.locate(frameAt(p))
         case let .move(_, _, _, copies): doc.endGesture(copies == nil ? "Move" : "Copy")
+        case let .connect(ids, downFrame):
+            if let target = connectTarget(at: p, excluding: ids) {
+                let delta = frameAt(p) - downFrame
+                var connected = 0
+                doc.updateGesture { q in
+                    EditOperations.move(&q, ids: ids, by: delta)
+                    for id in ids where EditOperations.connect(&q, id: id, to: target.id) { connected += 1 }
+                }
+                doc.endGesture(connected > 0 ? "Connect" : "Move")
+            } else {
+                doc.endGesture("Move")
+            }
         case .trim: doc.endGesture("Trim")
         case .fade: doc.endGesture("Fade")
         case .fadeShape: doc.endGesture("Fade Shape")
@@ -362,7 +398,18 @@ extension TimelineMetalView {
         editor.pointer.rubberBand = nil
         editor.pointer.rubberTop = nil
         editor.pointer.rubberBottom = nil
+        editor.pointer.insertion = nil
+        editor.pointer.connectTarget = nil
         updateHover(p, flags: event.modifierFlags)
+    }
+
+    /// The region on a magnetic lane under `p`, not one of `ids`.
+    private func connectTarget(at p: CGPoint, excluding ids: Set<UUID>) -> Region? {
+        guard let lane = editor.lane(atY: Double(p.y)), lane.track.magnetic else { return nil }
+        let frame = editor.frame(forX: Double(p.x))
+        return editor.project.regions.last {
+            $0.trackId == lane.track.id && !ids.contains($0.id) && Double($0.position) <= frame && frame < Double($0.end)
+        }
     }
 
     // MARK: Hover

@@ -60,6 +60,16 @@ struct TransportPanel: View {
             .disabled(editor.multitrack)
             .help("Hear only the shown track (Option S). Playback only: mute, solo and export are not changed.")
 
+            Toggle(isOn: Binding(get: { editor.selectedTrack.magnetic },
+                                 set: { _ in editor.toggleMagnetic(editor.selectedTrackID) })) {
+                Image(nsImage: MagnetIcon.image(size: 12, on: editor.selectedTrack.magnetic))
+                    .padding(.horizontal, 1)
+            }
+            .toggleStyle(.button)
+            .tint(Color(nsColor: Theme.accent))
+            .disabled(editor.multitrack)
+            .help("Magnetic track (Shift Command G): no gaps, dragging reorders, trims ripple")
+
             Spacer(minLength: 8)
 
             Text(rateText)

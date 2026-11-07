@@ -167,6 +167,9 @@ final class TimelineMetalView: MTKView {
         case pressRegion(id: UUID, downX: Double, downY: Double, downFrame: Int64)
         /// `copies` maps each region to its copy's id for an Option drag; nil moves the regions themselves.
         case move(ids: Set<UUID>, downFrame: Int64, downLane: Int, copies: [UUID: UUID]?)
+        /// Option Command drag: moves `ids` in time on their own track and connects them to the region it is
+        /// released over on a magnetic track.
+        case connect(ids: Set<UUID>, downFrame: Int64)
         case trim(id: UUID, start: Bool)
         case fade(id: UUID, end: EditOperations.FadeEnd, ids: Set<UUID>)
         case fadeShape(id: UUID, end: EditOperations.FadeEnd, ids: Set<UUID>, startValue: Double, downY: Double)

@@ -111,7 +111,7 @@ final class ProcessSession: ObservableObject {
         let project = editor.project
         if let range = editor.range, !range.isEmpty {
             let hits = project.regions.filter {
-                $0.position < range.end && $0.end > range.start && (allTracks || $0.trackId == editor.selectedTrackID)
+                !$0.isGap && $0.position < range.end && $0.end > range.start && (allTracks || $0.trackId == editor.selectedTrackID)
             }
             let t = hits.map { r -> ProcessTarget in
                 let span = r.timelineRange.clamped(to: range)
@@ -121,7 +121,7 @@ final class ProcessSession: ObservableObject {
             }
             return (t, range)
         }
-        let t = editor.selectedRegions.map {
+        let t = editor.selectedRegions.filter { !$0.isGap }.map {
             ProcessTarget(region: $0, sourceRange: SampleRange(start: $0.sourceIn, end: $0.sourceOut), span: $0.timelineRange, partial: false)
         }
         return (t, nil)

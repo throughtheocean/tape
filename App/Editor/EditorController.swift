@@ -25,6 +25,8 @@ final class EditorController: ObservableObject {
 
     /// Called when anything the timeline draws has changed.
     var needsDisplay: (() -> Void)?
+    /// Asks before a destructive change: message, explanation, the button that goes ahead, what it does.
+    var confirm: ((String, String, String, @escaping () -> Void) -> Void)?
     /// Width of the timeline in points, set by the timeline view.
     var timelineWidth: Double = 1000 {
         didSet { if oldValue != timelineWidth { clampView(); updateZoomReadout() } }
@@ -67,11 +69,21 @@ final class EditorController: ObservableObject {
         var hint: String?
         var hintX: Double = 0
         var hintY: Double?
+        /// Insertion point of a drag on a magnetic track.
+        var insertion: Insertion?
+        /// Region an Option Command drag would connect to.
+        var connectTarget: UUID?
+
+        struct Insertion: Equatable {
+            var track: UUID
+            var frame: Int64
+        }
 
         static func == (a: PointerOverlay, b: PointerOverlay) -> Bool {
             a.hoverRegion == b.hoverRegion && a.hoverEdge?.id == b.hoverEdge?.id && a.hoverEdge?.start == b.hoverEdge?.start
                 && a.bladeFrame == b.bladeFrame && a.rubberBand == b.rubberBand && a.rubberTop == b.rubberTop
                 && a.rubberBottom == b.rubberBottom && a.hint == b.hint && a.hintX == b.hintX && a.hintY == b.hintY
+                && a.insertion == b.insertion && a.connectTarget == b.connectTarget
         }
     }
     var pointer = PointerOverlay() {

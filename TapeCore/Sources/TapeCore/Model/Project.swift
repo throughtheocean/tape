@@ -59,7 +59,23 @@ public struct Fade: Codable, Equatable, Hashable, Sendable {
     public static let none = Fade()
 }
 
+/// A connected region's link to a region on a magnetic track: it starts `offset` frames after the anchor's start.
+public struct Anchor: Codable, Equatable, Hashable, Sendable {
+    public var regionId: UUID
+    public var offset: Int64
+
+    public init(regionId: UUID, offset: Int64) {
+        self.regionId = regionId
+        self.offset = offset
+    }
+}
+
 public struct Region: Codable, Equatable, Hashable, Identifiable, Sendable {
+    /// Source id of gap regions: silence of any length that keeps a magnetic sequence intact. No source has it.
+    public static let gapSourceID = UUID(uuidString: "00000000-0000-0000-0000-00000000000A")!
+    /// A gap's `sourceIn`, far from 0 so its start can be trimmed earlier as freely as its end later.
+    public static let gapOrigin: Int64 = 1 << 40
+
     public var id: UUID
     public var name: String
     /// The track the region belongs to.
@@ -74,9 +90,11 @@ public struct Region: Codable, Equatable, Hashable, Identifiable, Sendable {
     public var gainDB: Double
     public var fadeIn: Fade
     public var fadeOut: Fade
+    /// Set on a connected region: it follows its anchor when the anchor moves.
+    public var anchor: Anchor?
 
     public init(id: UUID = UUID(), name: String, trackId: UUID = Track.firstID, sourceId: UUID, sourceIn: Int64, sourceOut: Int64,
-                position: Int64, gainDB: Double = 0, fadeIn: Fade = .none, fadeOut: Fade = .none) {
+                position: Int64, gainDB: Double = 0, fadeIn: Fade = .none, fadeOut: Fade = .none, anchor: Anchor? = nil) {
         self.id = id
         self.name = name
         self.trackId = trackId
@@ -87,7 +105,16 @@ public struct Region: Codable, Equatable, Hashable, Identifiable, Sendable {
         self.gainDB = gainDB
         self.fadeIn = fadeIn
         self.fadeOut = fadeOut
+        self.anchor = anchor
     }
+
+    /// Silence of `length` on `track` at `position`.
+    public static func gap(id: UUID = UUID(), track: UUID, position: Int64, length: Int64) -> Region {
+        Region(id: id, name: "Gap", trackId: track, sourceId: gapSourceID, sourceIn: gapOrigin, sourceOut: gapOrigin + length,
+               position: position)
+    }
+
+    public var isGap: Bool { sourceId == Self.gapSourceID }
 
     public var length: Int64 { sourceOut - sourceIn }
     public var end: Int64 { position + length }
@@ -156,9 +183,11 @@ public struct Track: Equatable, Hashable, Identifiable, Sendable {
     public var pan: Double
     public var mute: Bool
     public var solo: Bool
+    /// The regions are one sequence without gaps from 0; positions follow from order and lengths.
+    public var magnetic: Bool
 
     public init(id: UUID = UUID(), name: String, color: Int = 0, gainDB: Double = 0, pan: Double = 0,
-                mute: Bool = false, solo: Bool = false) {
+                mute: Bool = false, solo: Bool = false, magnetic: Bool = false) {
         self.id = id
         self.name = name
         self.color = color
@@ -166,6 +195,7 @@ public struct Track: Equatable, Hashable, Identifiable, Sendable {
         self.pan = pan
         self.mute = mute
         self.solo = solo
+        self.magnetic = magnetic
     }
 }
 
@@ -252,6 +282,8 @@ extension Project: Codable {
         var pan: Double
         var mute: Bool
         var solo: Bool
+        /// Written only when on, so documents without magnetic tracks read as before.
+        var magnetic: Bool?
         var regions: [Region]
     }
 
@@ -264,7 +296,7 @@ extension Project: Codable {
         master = try c.decodeIfPresent(Master.self, forKey: .master) ?? Master()
         if let files = try c.decodeIfPresent([TrackFile].self, forKey: .tracks) {
             tracks = files.map { Track(id: $0.id, name: $0.name, color: $0.color, gainDB: $0.gainDB, pan: $0.pan,
-                                       mute: $0.mute, solo: $0.solo) }
+                                       mute: $0.mute, solo: $0.solo, magnetic: $0.magnetic ?? false) }
             regions = files.flatMap { f in f.regions.map { r in
                 var r = r
                 r.trackId = f.id
@@ -285,7 +317,7 @@ extension Project: Codable {
         try c.encode(master, forKey: .master)
         let files = tracks.map { t in
             TrackFile(id: t.id, name: t.name, color: t.color, gainDB: max(t.gainDB, Track.silentDB), pan: t.pan, mute: t.mute,
-                      solo: t.solo, regions: regions.filter { $0.trackId == t.id })
+                      solo: t.solo, magnetic: t.magnetic ? true : nil, regions: regions.filter { $0.trackId == t.id })
         }
         try c.encode(files, forKey: .tracks)
     }

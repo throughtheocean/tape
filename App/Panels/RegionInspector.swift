@@ -23,9 +23,10 @@ struct RegionInspector: View {
                     .focused($nameFocused)
                     .onSubmit(commitName)
                     .onChange(of: nameFocused) { _, focused in if !focused { commitName() } }
-                row("Source", editor.project.source(first.sourceId)?.name ?? "Missing")
+                row("Source", first.isGap ? "Gap" : editor.project.source(first.sourceId)?.name ?? "Missing")
                 row("Position", format.string(first.position))
                 row("Length", format.string(first.length))
+                if editor.project.track(first.trackId)?.magnetic == false { connection }
             } else {
                 let start = regions.map(\.position).min() ?? 0
                 let end = regions.map(\.end).max() ?? 0
@@ -43,6 +44,42 @@ struct RegionInspector: View {
 
         fadeSection("Fade In", first.fadeIn, .fadeIn)
         fadeSection("Fade Out", first.fadeOut, .fadeOut)
+    }
+
+    private var isAnchor: Bool { editor.project.regions.contains { $0.anchor?.regionId == first.id } }
+
+    /// Regions on magnetic tracks this one can connect to, nearest to its start first. None while others connect to it.
+    private var anchors: [Region] {
+        if isAnchor { return [] }
+        let magnetic = Set(editor.project.tracks.filter(\.magnetic).map(\.id))
+        func distance(_ r: Region) -> Int64 {
+            r.position <= first.position && first.position < r.end ? 0 : min(abs(r.position - first.position), abs(r.end - first.position))
+        }
+        return editor.project.regions.filter { magnetic.contains($0.trackId) }.sorted { distance($0) < distance($1) }
+    }
+
+    private var connection: some View {
+        let anchor = first.anchor.flatMap { a in editor.project.regions.first { $0.id == a.regionId } }
+        return HStack {
+            Text("Connected").foregroundStyle(Color.tapeSecondary)
+            Spacer()
+            Menu(anchor?.name ?? "Connect to...") {
+                ForEach(anchors.prefix(20)) { r in
+                    Button("\(editor.project.track(r.trackId)?.name ?? ""): \(r.name) at \(format.string(r.position))") {
+                        editor.connect(first.id, to: r.id)
+                    }
+                }
+                if anchor != nil {
+                    Divider()
+                    Button("Disconnect") { editor.disconnect([first.id]) }
+                }
+            }
+            .frame(width: 150)
+            .disabled(anchor == nil && anchors.isEmpty)
+            .help(isAnchor ? "Other regions are connected to this one"
+                  : anchors.isEmpty ? "Make a track magnetic to connect regions to it" : "Follows the chosen region when it moves")
+        }
+        .font(.system(size: 12))
     }
 
     private func commitName() {

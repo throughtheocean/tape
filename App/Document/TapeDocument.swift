@@ -65,11 +65,10 @@ final class TapeDocument: ObservableObject {
 
     // MARK: Undoable changes
 
-    /// Applies one user action as one undo step named `name`.
+    /// Applies one user action as one undo step named `name`. Magnetic tracks and connected regions settle after it.
     func apply(_ name: String, _ change: (inout Project) -> Void) {
         var next = project
-        change(&next)
-        next.sortRegions()
+        EditOperations.edit(&next, change)
         guard next != project else { return }
         replaceProject(next, actionName: name)
     }
@@ -89,8 +88,7 @@ final class TapeDocument: ObservableObject {
     func updateGesture(_ change: (inout Project) -> Void) {
         guard let base = gestureBase else { return }
         var next = base
-        change(&next)
-        next.sortRegions()
+        EditOperations.edit(&next, change)
         guard next != project else { return }
         project = next
         revision += 1
@@ -444,6 +442,7 @@ final class TapeDocument: ObservableObject {
 
     /// Source length in session frames, the limit for trimming a region's end.
     func sourceLength(_ id: UUID) -> Int64 {
+        if id == Region.gapSourceID { return Region.gapOrigin * 2 }
         if let loaded = loaded[id] { return loaded.source.frameCount }
         return project.source(id)?.sessionFrameCount(sessionRate: sessionRate) ?? 0
     }

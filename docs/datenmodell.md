@@ -10,11 +10,33 @@ A `.tape` package holds `project.json` (version 2) and an `Audio` folder with th
 
 - `sessionRate`, `channelCount`: set by the first audio that enters an empty document (import, drop or recording).
 - `sources`: one `SourceRef` per file: id, name, location (inside the package or external with a bookmark), sample rate, channel count, frame count, pre-roll frames for recordings.
-- `tracks`: ordered top to bottom. Each has id, name, color, `gainDB`, `pan` (-1 to 1), `mute`, `solo`.
-- `regions`: id, name, `trackId`, `sourceId`, `sourceIn`/`sourceOut` (frames in the source), `position` (frame on the timeline), `gainDB`, `fadeIn`/`fadeOut` (length, shape, blend).
+- `tracks`: ordered top to bottom. Each has id, name, color, `gainDB`, `pan` (-1 to 1), `mute`, `solo`, `magnetic` (written only when on).
+- `regions`: id, name, `trackId`, `sourceId`, `sourceIn`/`sourceOut` (frames in the source), `position` (frame on the timeline), `gainDB`, `fadeIn`/`fadeOut` (length, shape, blend), `anchor` (only on connected regions, see below).
 - `master`: `gainDB`.
 
 All positions and lengths are frames at the session rate.
+
+## Magnetic tracks and connected regions
+
+A magnetic track is one sequence without gaps, starting at frame 0. What the edits change on it is order and lengths; `position` follows from them. The file still stores every position, so the renderer, export and an older Tape read a magnetic track like any other. The renderer does not know the flag: a magnetic track renders exactly like the same regions on a free track.
+
+Every edit goes through `EditOperations.edit`, which runs the change and then `settle`, against the state before the change:
+
+1. Each magnetic track is laid out from 0 in position order. On equal positions a region the edit added goes first, so a drop or a take at a region's start lands before it. Regions on magnetic tracks carry no anchor.
+2. A connected region the edit did not touch moves by as much as its anchor moved: `position = anchor.position + offset`. A connected region the edit moved itself keeps the place it was moved to, and its offset is measured again. Gain, fades, track and length are never taken from the anchor.
+3. A connection whose anchor is gone (deleted) is dropped; the region keeps its absolute position. Connections do not chain: a region others are connected to cannot be connected itself.
+
+How the edits read on a magnetic track:
+
+- Move: the dragged regions go in after every other region whose middle lies before their new start; the others close up behind them and open a slot for them. Moved onto another track, they leave the sequence and it closes.
+- Trim: the end changes the length, everything after it shifts. The start changes `sourceIn` and the region stays where the sequence puts it, so trimming the start also shifts what follows. Followers' connected regions shift with them by exactly the trimmed amount.
+- Blade: two regions, no gap. Connected regions at or after the cut move their anchor to the right part.
+- Delete: removes and ripples. Forward Delete replaces the region with a gap region of the same length and the same id, so regions connected to it stay connected.
+- Drop and recording onto a magnetic track are inserted by their position like a move. Duplicate puts the copies right after the selection and the rest moves along.
+
+Gap regions are silence. Their `sourceId` is reserved (`00000000-0000-0000-0000-00000000000A`), no source has it, and the edit list skips them. Their `sourceIn` starts at 2^40 so the start can be trimmed earlier as freely as the end later. They can be trimmed, moved and deleted like other regions. An older Tape would list them as regions with a missing source.
+
+`anchor` is `{regionId, offset}`: the connected region starts `offset` frames after the anchor's start (negative is allowed). Connecting needs the connected region on a free track and the anchor on a magnetic track. Making a track magnetic removes the anchors of its own regions (the app asks first). Making a track free keeps everything: positions stay, and connections to its regions stay, so a free track can be edited and made magnetic again without losing them.
 
 ## Renderer
 
