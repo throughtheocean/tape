@@ -1176,3 +1176,10 @@ Not done yet. `security find-identity -v -p codesigning` lists two Apple Develop
 1. Part A (certificate, `.p12`, `tape-notary` profile), and confirm the team ID.
 2. Clean the tree (deviation 4), then `scripts/release.sh`. Please send me the notarytool submission id and the `spctl` line for the report.
 3. The zip on a second Mac: no Gatekeeper dialog, microphone prompt on the first record, icon in Finder, Dock and About.
+
+## Loop: selected regions (Maik's request after M11)
+
+- The loop button in the transport (and Command L) now loops, in this order: the range if one is marked, else the selected regions from the first start to the last end, else the whole document. The loop bar above the timeline shows that span; it follows the selection and edits to the selected regions.
+- Play with loop on and the playhead outside the loop starts at the loop start, as Logic does with its cycle. This applies to range loops too; before, playback ran from the playhead into the loop.
+- The loop symbol is drawn in the accent colour while loop is on; the plain button state was hard to see.
+- `scripts/selftest/loop-selection.txt` (track muted, nothing heard): region at 5 s to 8 s selected, loop on, play from 0: playback started at the region and was at 290713 after 1 s and at 293834 after 4 s, so it wrapped inside the region. The first region selected with the playhead at 300000: playback started at 0.

@@ -17,9 +17,10 @@ struct TransportPanel: View {
 
             Toggle(isOn: Binding(get: { editor.loopEnabled }, set: { _ in editor.toggleLoop() })) {
                 Image(systemName: "repeat")
+                    .foregroundStyle(editor.loopEnabled ? Color(nsColor: Theme.accent) : Color.primary)
             }
             .toggleStyle(.button)
-            .help("Loop Playback (Command L)")
+            .help("Loop the range, else the selected regions, else everything (Command L)")
 
             TimecodeReadout(clock: editor.clock, editor: editor)
 

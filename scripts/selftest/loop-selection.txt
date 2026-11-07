@@ -1,0 +1,27 @@
+# Loop plays the selected region when no range is marked. Track 1 is muted, so nothing is heard.
+wait 1
+import /tmp/tape-m6-a.wav
+waitLoaded
+view 0 500
+key cmd+shift+m
+header 1 click mute
+drop opt f240000 lane1 /tmp/tape-m6-b.wav
+waitLoaded
+mouse click f300000 wave:1
+key cmd+l
+locate f0
+key space
+wait 1
+log playing from the region start 240000, about 1 s in: playhead near 288000
+wait 3
+log 4 s in, the 3 s region wrapped once: playhead near 288000 again, inside 240000 to 384000
+snapshot /tmp/tape-loop-region.png
+key space
+mouse click f100000 wave:1
+locate f300000
+key space
+wait 1
+log first region selected, playhead 300000 is outside it: play starts at 0, near 48000
+key space
+key cmd+l
+quit

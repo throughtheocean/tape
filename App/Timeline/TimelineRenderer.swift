@@ -456,8 +456,7 @@ final class TimelineRenderer: NSObject, MTKViewDelegate {
                 rects.append(RectInstance(rect: [x1 - s, top, 1 * s, h - top], color: yellow))
             }
         }
-        if editor.loopEnabled {
-            let loop = editor.range ?? SampleRange(start: 0, end: editor.documentLength)
+        if editor.loopEnabled, let loop = editor.loopSpan {
             let x0 = px(editor, frame: Double(loop.start), scale: scale)
             let x1 = px(editor, frame: Double(loop.end), scale: scale)
             rects.append(RectInstance(rect: [x0, top - 5 * s, max(x1 - x0, 1), 3 * s], color: Theme.accent.rgba))

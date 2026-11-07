@@ -42,7 +42,11 @@ final class EditorController: ObservableObject {
     @Published var errorMessage: String?
     /// Selected region ids.
     @Published var selection: Set<UUID> = [] {
-        didSet { if oldValue != selection { needsDisplay?() } }
+        didSet {
+            guard oldValue != selection else { return }
+            if loopEnabled, range == nil { updateLoop() }
+            needsDisplay?()
+        }
     }
     private(set) var playhead: Int64
     /// Timeline span of the recording in progress, drawn as a growing block.
@@ -281,7 +285,11 @@ final class EditorController: ObservableObject {
             stopPlayback(at: playback.position)
         } else {
             var from = playhead
-            if currentLoop() == nil, from >= documentLength { from = 0 }
+            if let loop = currentLoop() {
+                if from < loop.start || from >= loop.end { from = loop.start }
+            } else if from >= documentLength {
+                from = 0
+            }
             startPlayback(from: from, speed: 1)
         }
     }
@@ -438,7 +446,16 @@ final class EditorController: ObservableObject {
 
     private func currentLoop() -> SampleRange? {
         guard loopEnabled, !loopSuspended else { return nil }
+        return loopSpan
+    }
+
+    /// What Loop plays: the range, else the selected regions from the first start to the last end, else the document.
+    var loopSpan: SampleRange? {
         if let range, !range.isEmpty { return range }
+        let selected = project.regions.filter { selection.contains($0.id) }
+        if let start = selected.map(\.position).min(), let end = selected.map(\.end).max(), end > start {
+            return SampleRange(start: start, end: end)
+        }
         return documentLength > 0 ? SampleRange(start: 0, end: documentLength) : nil
     }
 
