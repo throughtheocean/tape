@@ -1,0 +1,32 @@
+# Quit asks to save the session or export the audio. askquit runs the same questions as Command Q without quitting.
+# Nothing is played. The export goes to /tmp/tape-quit.
+wait 1
+askquit
+log empty untitled document: nothing to ask, quit goes on
+import /tmp/tape-m6-a.wav
+waitLoaded
+askquit
+alert
+sheet Cancel
+log Cancel: quit cancelled, document unchanged
+askquit
+exportto /tmp/tape-quit/mix.wav
+sheet Export Audio...
+wait 0.5
+export state
+sheet return
+waitExport
+log Export Audio: the export sheet opened, the file was written and the quit went on
+askquit
+sheet escape
+view 0 500
+mouse click f96000 wave
+key cmd+b
+askquit
+sheet Cancel
+log after the export nothing changed; after a split it has changed again
+log Esc on the question is Cancel
+askquit
+sheet Quit
+log Quit: goes on without saving (untitled sessions reopen next time)
+quit

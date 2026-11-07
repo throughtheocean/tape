@@ -443,14 +443,74 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             guard let self, let sheet = self.exportSheet else { return }
             session.chooseAndExport(in: sheet, destination: self.exportDestination) { ok in
                 self.lastExportStatus = session.status
-                if ok { close() }
+                guard ok else { return }
+                self.tapeDocument.markExported()
+                close()
+                self.finishExportForQuit(true)
             }
-        }, close: close)
+        }, close: { [weak self] in
+            close()
+            self?.finishExportForQuit(false)
+        })
         let sheet = NSWindow(contentViewController: NSHostingController(rootView: view))
         sheet.appearance = NSAppearance(named: .darkAqua)
         exportSheet = sheet
         exportSession = session
         window.beginSheet(sheet)
+    }
+
+    // MARK: Quit
+
+    /// Something worth keeping that is not saved under a name or not exported since it changed.
+    var needsQuitQuestion: Bool {
+        !tapeDocument.isEmpty && (tapeDocument.isUntitled || tapeDocument.hasUnexportedChanges)
+    }
+
+    private var exportForQuit: ((Bool) -> Void)?
+
+    private func finishExportForQuit(_ exported: Bool) {
+        let done = exportForQuit
+        exportForQuit = nil
+        done?(exported)
+    }
+
+    /// Asks whether to save the session or export its audio first; `done(true)` lets the quit go on.
+    func askBeforeQuit(_ done: @escaping (Bool) -> Void) {
+        guard let window else { return done(true) }
+        window.makeKeyAndOrderFront(nil)
+        guard window.attachedSheet == nil else { return done(false) }
+        let untitled = tapeDocument.isUntitled
+        let alert = NSAlert()
+        if untitled {
+            alert.messageText = "Save this session or export its audio before quitting?"
+            alert.informativeText = "The session has no name yet. It opens again next time, but is kept only until you close it."
+            alert.addButton(withTitle: "Save Session...")
+        } else {
+            alert.messageText = "Export the audio of \u{201C}\(tapeDocument.displayName)\u{201D} before quitting?"
+            alert.informativeText = "The session is saved. Its changes since it was opened or last exported are not in an audio file yet."
+        }
+        alert.addButton(withTitle: "Export Audio...")
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Quit")
+        openAlert = alert
+        alert.beginSheetModal(for: window) { response in
+            MainActor.assumeIsolated {
+                self.openAlert = nil
+                let index = response.rawValue - NSApplication.ModalResponse.alertFirstButtonReturn.rawValue
+                switch alert.buttons.indices.contains(index) ? alert.buttons[index].title : "Cancel" {
+                case "Save Session...": self.runSavePanel { saved in done(saved) }
+                case "Export Audio...":
+                    self.exportForQuit = done
+                    // The question's sheet is still attached while this runs.
+                    DispatchQueue.main.async {
+                        self.presentExport(scope: nil, region: nil)
+                        if self.exportSheet == nil { self.finishExportForQuit(false) }
+                    }
+                case "Quit": done(true)
+                default: done(false)
+                }
+            }
+        }
     }
 
     @objc func consolidate(_ sender: Any?) {

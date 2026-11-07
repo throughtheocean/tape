@@ -14,6 +14,8 @@ final class TapeDocument: ObservableObject {
     @Published private(set) var failures: [UUID: String] = [:]
     @Published private(set) var peakTimes: [UUID: Double] = [:]
     var view: ViewState
+    /// The project as opened or last exported; quitting asks about an export when it differs.
+    private var exportedProject: Project
 
     let undoManager = UndoManager()
     private let autosave = Debouncer(delay: 0.5)
@@ -23,6 +25,7 @@ final class TapeDocument: ObservableObject {
         let file = try package.load()
         self.package = package
         project = file.document
+        exportedProject = file.document
         view = file.view
         loadMissingSources()
     }
@@ -46,6 +49,10 @@ final class TapeDocument: ObservableObject {
     }
 
     var displayName: String { isUntitled ? "Untitled" : package.name }
+
+    var hasUnexportedChanges: Bool { project != exportedProject }
+
+    func markExported() { exportedProject = project }
 
     var isEmpty: Bool { project.regions.isEmpty && project.sources.isEmpty }
 

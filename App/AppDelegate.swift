@@ -50,6 +50,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard !isScripted else { return .terminateNow }
+        let pending = controllers.filter(\.needsQuitQuestion)
+        guard !pending.isEmpty else { return .terminateNow }
+        askBeforeQuit(pending[...]) { NSApp.reply(toApplicationShouldTerminate: $0) }
+        return .terminateLater
+    }
+
+    /// One question per document, in turn; Cancel on any of them stops the quit.
+    func askBeforeQuit(_ rest: ArraySlice<MainWindowController>, done: @escaping (Bool) -> Void) {
+        guard let c = rest.first else { return done(true) }
+        c.askBeforeQuit { go in
+            if go { self.askBeforeQuit(rest.dropFirst(), done: done) } else { done(false) }
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         RecordController.shared.shutdown()
         rememberOpenDocuments()

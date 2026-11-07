@@ -153,7 +153,7 @@ final class SelfTest {
         case "namefield":
             nameField(args, controller: c)
         case "sheet":
-            sheet(args.first ?? "return", controller: c)
+            sheet(args.isEmpty ? "return" : args.joined(separator: " "), controller: c)
         case "preview":
             c.processSession?.setPreview(args.first == "on")
             write("preview \(c.processSession?.previewing == true ? "on" : "off") playing \(editor.isPlaying)")
@@ -222,6 +222,12 @@ final class SelfTest {
             // loopback <click track> <recorded track>: where each played click landed in the recording.
             guard args.count == 2, let a = Int(args[0]), let b = Int(args[1]) else { break }
             loopback(c, clickTrack: a, recordedTrack: b)
+        case "askquit":
+            let pending = (app?.controllers ?? []).filter(\.needsQuitQuestion)
+            write("askquit: \(pending.count) document(s) to ask about; front untitled \(c.tapeDocument.isUntitled) changed since export \(c.tapeDocument.hasUnexportedChanges)")
+            app?.askBeforeQuit(pending[...]) { [weak self] go in self?.write("askquit: quit \(go ? "goes on" : "cancelled")") }
+        case "alert":
+            write("alert '\(c.openAlert?.messageText ?? "none")' buttons \(c.openAlert?.buttons.map(\.title) ?? [])")
         case "quit":
             flushLog()
             NSApp.terminate(nil)
@@ -603,9 +609,19 @@ final class SelfTest {
             write("no sheet")
             return
         }
+        if key != "escape", key != "return" {
+            guard let button = controller.openAlert?.buttons.first(where: { $0.title == key }) else {
+                write("sheet: no button '\(key)'")
+                return
+            }
+            button.performClick(nil)
+            write("sheet clicked '\(key)', sheet open \(controller.window?.attachedSheet != nil)")
+            return
+        }
         let chars = key == "escape" ? "\u{1b}" : "\r"
         let code: UInt16 = key == "escape" ? 53 : 36
-        let alertButton = key == "escape" ? controller.openAlert?.buttons.last : controller.openAlert?.buttons.first
+        let buttons = controller.openAlert?.buttons
+        let alertButton = key == "escape" ? buttons?.first { $0.title == "Cancel" } ?? buttons?.last : buttons?.first
         if let button = alertButton ?? findButton(sheet.contentView, keyEquivalent: chars) {
             button.performClick(nil)
             write("sheet \(key) clicked '\(button.title)', sheet open \(controller.window?.attachedSheet != nil)")

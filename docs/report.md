@@ -1247,3 +1247,13 @@ Tests: `NamePieceTests` (text and tokens split and join back unchanged, plain te
 By hand, `scripts/selftest/export-names.txt` with two regions: the default pattern shows as [Project]-[Number 01]; typing "Mix, take_", dropping Region (through a pasteboard, as a drop does), typing "_v2 {date}" and ending the edit gave "Mix, take_[Region]_v2 [Date]", then a dropped Number 01; the summary read "Mix, take_tape-m6-a_v2 26110701.wav, ..._02.wav". Screenshot checked. A real mouse drag from the chip row could not be driven by the harness; it uses the same pasteboard path, but please try it once. `m6-multitrack` (stems export) runs clean.
 
 Note: an early experiment for this put `{region}` on the general clipboard; later tests use a private pasteboard.
+
+## Ask before quitting (Maik's request)
+
+- Command Q now asks, per session, before Tape quits: "Save Session..." (only when the session has no name yet), "Export Audio...", "Quit" and "Cancel". Esc is Cancel; Cancel on any session stops the quit.
+- Which sessions are asked about: ones with audio that are untitled, or that changed since they were opened or last exported (the project is compared, so undoing back to the exported state does not ask). An empty session or one unchanged since its last export quits without a question. Saved sessions are always saved already (autosave), so for them the question is only about exporting.
+- Export Audio opens the normal export sheet; once the file is written the quit goes on, Cancel in the sheet stops it. Save Session opens the save panel; saving lets the quit go on.
+- "Quit" keeps the old behaviour: an untitled session opens again at the next start.
+- Help page: new section "Saving and quitting".
+
+By hand, `scripts/selftest/quit-ask.txt` (`askquit` runs the same questions as Command Q without quitting): an empty session asks nothing; with audio the question lists the four buttons; Cancel and Esc stop the quit; Export Audio opened the export sheet, wrote `/tmp/tape-quit/mix.wav` (1.1 MB) and let the quit go on; afterwards the session counts as exported until a split changes it; Quit goes on. Screenshot of the question checked. Not covered by the harness: the save panel (it needs a person), and a saved, named session (the harness cannot open one), which takes the same path with the export question only.
