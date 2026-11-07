@@ -1,0 +1,28 @@
+# M10b loopback, run by hand: this plays audible clicks. Route the default output back into the input
+# (cable or TotalMix loopback) and pick that input channel in Tape's record row before running.
+# Track 1 plays a click every 0.5 s, R during playback records it onto track 2, `loopback` prints where
+# each recorded click landed relative to the played one (+ is late).
+wait 1
+clicks /tmp/tape-m10b-clicks.wav 10 0.5
+import /tmp/tape-m10b-clicks.wav
+waitLoaded
+fit
+key cmd+shift+m
+key cmd+t
+header 2 click body
+set device Babyface
+set preroll 1
+set monitoring off
+wait 2
+locate f0
+key space
+wait 1.2
+key r
+wait 6
+key r
+wait 1
+waitLoaded
+key space
+log after take
+loopback 1 2
+quit

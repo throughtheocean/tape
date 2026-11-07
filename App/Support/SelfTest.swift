@@ -204,12 +204,98 @@ final class SelfTest {
                          args.joined(separator: " "), l.momentary, l.shortTerm, l.integrated,
                          AppSettings.shared.loudnessMode.title, c.editor.loudnessReading, bars[0], bars[1],
                          AppSettings.shared.loudnessTarget))
+        case "latency":
+            latency()
+        case "clicks":
+            // clicks <path> <seconds> <interval seconds>: a 48 kHz mono click track, the first click at 0.25 s.
+            guard args.count == 3, let seconds = Double(args[1]), let interval = Double(args[2]) else { break }
+            write(clickFile(args[0], seconds: seconds, interval: interval))
+        case "loopback":
+            // loopback <click track> <recorded track>: where each played click landed in the recording.
+            guard args.count == 2, let a = Int(args[0]), let b = Int(args[1]) else { break }
+            loopback(c, clickTrack: a, recordedTrack: b)
         case "quit":
             flushLog()
             NSApp.terminate(nil)
         default:
             write("unknown command \(command)")
         }
+    }
+
+    private func latency() {
+        let r = RecordController.shared
+        func text(_ l: DeviceLatency?) -> String {
+            guard let l else { return "none" }
+            return String(format: "device %d safety %d stream %d buffer %d frames at %.0f Hz = %.2f ms + buffer %.2f ms",
+                          l.deviceFrames, l.safetyFrames, l.streamFrames, l.bufferFrames, l.sampleRate,
+                          l.hardwareSeconds * 1000, l.bufferSeconds * 1000)
+        }
+        write("latency input \(r.device?.name ?? "none"): \(text(r.inputLatency))")
+        write("latency output: \(text(r.outputLatency))")
+        write(String(format: "latency monitoring round trip %.2f ms, monitoring %@", r.monitoringLatencyMs ?? -1,
+                     AppSettings.shared.inputMonitoring.rawValue))
+        let out = r.engine.throughDevice.map { id in AudioDevices.name(id) ?? "\(id)" } ?? "none"
+        if let e = r.inputError { write("input error: \(e)") }
+        write("through: \(r.engine.throughFrames) frames played on \(out), default output \(AudioDevices.defaultOutputDevice.flatMap { AudioDevices.name($0) } ?? "none")")
+        if let o = r.lastOverdub {
+            write(String(format: "last overdub: render frame %lld at host %.6f, captured %.6f (stamped %@), minus input %.3f ms, output %.3f ms",
+                         o.render.position, o.render.hostSeconds, o.captured, o.stamped ? "yes" : "no",
+                         o.inputLatency * 1000, o.outputLatency * 1000))
+        }
+    }
+
+    private func clickFile(_ path: String, seconds: Double, interval: Double) -> String {
+        let rate = 48000.0
+        let frames = Int(seconds * rate)
+        var samples = [Float](repeating: 0, count: frames)
+        var t = 0.25
+        while t < seconds {
+            let i = Int(t * rate)
+            for k in 0..<5 where i + k < frames { samples[i + k] = 0.8 }
+            t += interval
+        }
+        let url = URL(fileURLWithPath: path)
+        try? FileManager.default.removeItem(at: url)
+        let format = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1)!
+        guard let file = try? AVAudioFile(forWriting: url, settings: format.settings),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frames)) else { return "clicks failed" }
+        buffer.frameLength = AVAudioFrameCount(frames)
+        buffer.floatChannelData![0].update(from: samples, count: frames)
+        do { try file.write(from: buffer) } catch { return "clicks failed: \(error.localizedDescription)" }
+        return "clicks \(path): \(seconds) s, every \(interval) s"
+    }
+
+    /// For every click on `clickTrack` inside the recorded region, the first sample of the recording that rises
+    /// above half the window's peak, between 50 ms before and 200 ms after the click. Offsets in ms, + is late.
+    private func loopback(_ c: MainWindowController, clickTrack: Int, recordedTrack: Int) {
+        let e = c.editor, tracks = e.project.tracks
+        guard tracks.indices.contains(clickTrack - 1), tracks.indices.contains(recordedTrack - 1) else { return }
+        let rate = e.sessionRate, length = Int(e.documentLength)
+        let list = c.tapeDocument.editList()
+        func render(_ t: Int) -> [Float] {
+            let out = SampleBuffer(channelCount: list.channelCount, capacity: max(length, 1))
+            EditListRenderer().render(list.stem(tracks[t - 1].id), start: 0, frames: length, into: out)
+            return out.toArrays(count: length)[0]
+        }
+        let clicks = render(clickTrack), recorded = render(recordedTrack)
+        let span = e.project.regions(onTrack: tracks[recordedTrack - 1].id).map(\.timelineRange)
+        var onsets: [Int] = []
+        var i = 0
+        while i < length {
+            if abs(clicks[i]) > 0.3 { onsets.append(i); i += Int(0.05 * rate) } else { i += 1 }
+        }
+        var offsets: [Double] = []
+        for o in onsets where span.contains(where: { $0.start <= Int64(o) - Int64(0.05 * rate) && Int64(o) + Int64(0.2 * rate) < $0.end }) {
+            let lo = o - Int(0.05 * rate), hi = o + Int(0.2 * rate)
+            let peak = recorded[lo..<hi].map(abs).max() ?? 0
+            guard peak > 0.01, let hit = (lo..<hi).first(where: { abs(recorded[$0]) >= peak * 0.5 }) else { continue }
+            offsets.append(Double(hit - o) / rate * 1000)
+        }
+        let sorted = offsets.sorted()
+        let median = sorted.isEmpty ? .nan : sorted[sorted.count / 2]
+        write(String(format: "loopback: %d clicks, %d found, offsets ms %@, median %.3f ms", onsets.count, offsets.count,
+                     offsets.map { String(format: "%.3f", $0) }.joined(separator: " "), median))
+        latency()
     }
 
     private func setting(_ args: [String]) {
@@ -224,6 +310,8 @@ final class SelfTest {
         case "device":
             let r = RecordController.shared
             r.select(device: r.devices.first { $0.name.contains(args[1]) })
+        case "monitoring": RecordController.shared.setMonitoring(InputMonitoring(rawValue: args[1]) ?? .off)
+        case "monitorvolume": RecordController.shared.engine.monitorVolume = Float(args[1]) ?? 1
         default: write("unknown setting \(args[0])")
         }
     }

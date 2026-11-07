@@ -1,0 +1,11 @@
+# M10b: Through monitoring starts, plays frames and reports its device; volume 0, so nothing is heard.
+wait 1
+set device MacBook
+set monitorvolume 0
+set monitoring through
+wait 2
+latency
+set monitoring off
+wait 1
+latency
+quit

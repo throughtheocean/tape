@@ -53,6 +53,8 @@ public final class RecordEngine: @unchecked Sendable {
     private let producerLock = NSLock()
     private var producer: Producer?
     private var engine: AVAudioEngine?
+    /// Through monitoring plays on its own engine: an engine's input and output unit share one device.
+    private var monitor: AVAudioEngine?
 
     // Writer queue state.
     private var ring: PCMRingBuffer?
@@ -115,7 +117,8 @@ public final class RecordEngine: @unchecked Sendable {
 
     /// Opens `device` through AVAudioEngine and starts monitoring the chosen channels (zero based).
     /// Only the engine's own input unit is pointed at the device; system defaults are not touched.
-    public func startInput(device: InputDevice, channels: [Int], preRollSeconds: Double) throws {
+    /// With `through`, the chosen channels also play on the default output (a mono channel on both sides).
+    public func startInput(device: InputDevice, channels: [Int], preRollSeconds: Double, through: Bool = false) throws {
         stopInput()
         let engine = AVAudioEngine()
         let input = engine.inputNode
@@ -130,9 +133,63 @@ public final class RecordEngine: @unchecked Sendable {
         input.installTap(onBus: 0, bufferSize: 4096, format: format) { buffer, when in
             producer.push(buffer, when: when)
         }
+        let monitor = through ? connectThrough(engine, input: format, selected: producer.selected) : nil
         engine.prepare()
         try engine.start()
         self.engine = engine
+        if let monitor {
+            monitor.prepare()
+            try monitor.start()
+            self.monitor = monitor
+        }
+    }
+
+    /// Level of Through monitoring, 1 is unity.
+    public var monitorVolume: Float = 1 {
+        didSet { monitor?.mainMixerNode.outputVolume = monitorVolume }
+    }
+
+    /// Frames Through monitoring has played since the input started, and the device it plays on.
+    public var throughFrames: Int { throughCount.withLock { $0 } }
+    public var throughDevice: AudioDeviceID? { monitor?.outputNode.auAudioUnit.deviceID }
+    private let throughCount = OSAllocatedUnfairLock(initialState: 0)
+
+    /// Input monitoring: a sink on the input engine takes the chosen channels each IO cycle into a small ring,
+    /// a source on an output engine (default output) plays them. The ring is kept short, so the delay stays at
+    /// about one buffer on top of the devices' own latency; drift between the two devices drops or pads frames.
+    private func connectThrough(_ engine: AVAudioEngine, input format: AVAudioFormat, selected: [Int]) -> AVAudioEngine {
+        let picked = selected.map { min($0, Int(format.channelCount) - 1) }
+        let ring = PCMRingBuffer(channelCount: picked.count, capacity: 16384)
+        let sink = AVAudioSinkNode { _, frames, list -> OSStatus in
+            ring.write(UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: list)), channels: picked, frames: Int(frames))
+            return noErr
+        }
+        let stereo = AVAudioFormat.deinterleavedFloat(sampleRate: format.sampleRate, channels: 2)
+        let scratch = SampleBuffer(channelCount: picked.count, capacity: 8192)
+        let count = throughCount
+        count.withLock { $0 = 0 }
+        let source = AVAudioSourceNode(format: stereo) { _, _, frames, list -> OSStatus in
+            let out = UnsafeMutableAudioBufferListPointer(list)
+            let n = Int(frames)
+            // More than two buffers waiting means the input ran ahead: drop the excess to keep the delay short.
+            let excess = ring.available - 2 * n
+            if excess > 0 { _ = ring.read(into: scratch.channels, maxFrames: min(excess, scratch.capacity)) }
+            let got = ring.read(into: scratch.channels, maxFrames: min(n, scratch.capacity))
+            for c in 0..<min(2, out.count) {
+                guard let dst = out[c].mData?.assumingMemoryBound(to: Float.self) else { continue }
+                dst.update(from: scratch.channels[min(c, picked.count - 1)], count: got)
+                (dst + got).update(repeating: 0, count: n - got)
+            }
+            count.withLock { $0 += got }
+            return noErr
+        }
+        engine.attach(sink)
+        engine.connect(engine.inputNode, to: sink, format: format)
+        let monitor = AVAudioEngine()
+        monitor.attach(source)
+        monitor.connect(source, to: monitor.mainMixerNode, format: stereo)
+        monitor.mainMixerNode.outputVolume = monitorVolume
+        return monitor
     }
 
     public func stopInput() {
@@ -141,6 +198,8 @@ public final class RecordEngine: @unchecked Sendable {
             engine.stop()
         }
         engine = nil
+        monitor?.stop()
+        monitor = nil
         producerLock.withLock { producer = nil }
         queue.sync {
             timer?.cancel()
@@ -161,9 +220,10 @@ public final class RecordEngine: @unchecked Sendable {
     /// Total refused writes and input discontinuities since monitoring started.
     public let dropouts = AtomicInt64()
 
-    /// Feeds frames as the tap would: one pointer per device channel.
-    public func push(_ deviceChannels: [UnsafePointer<Float>], frames: Int) {
-        producerLock.withLock { producer }?.push(deviceChannels, frames: frames)
+    /// Feeds frames as the tap would: one pointer per device channel, optionally with the host time (seconds) of
+    /// the first frame.
+    public func push(_ deviceChannels: [UnsafePointer<Float>], frames: Int, hostSeconds: Double? = nil) {
+        producerLock.withLock { producer }?.push(deviceChannels, frames: frames, hostSeconds: hostSeconds)
     }
 
     // MARK: Recording
@@ -190,6 +250,8 @@ public final class RecordEngine: @unchecked Sendable {
             }
             self.file = file
             fileURL = url
+            let live = monitoredFrames
+            lastLiveStartHostSeconds = producerLock.withLock { producer }?.hostSeconds(ofFrame: live, sampleRate: sampleRate)
             recordedFrames = Int64(preRoll)
             preRollFrames = Int64(preRoll)
             dropoutsAtStart = dropouts.load()
@@ -204,6 +266,10 @@ public final class RecordEngine: @unchecked Sendable {
             return Int64(preRoll)
         }
     }
+
+    /// Host time, in seconds, the first live frame (after the pre-roll) of the last recording reached the input
+    /// IO buffer; nil when the input gives no timestamps (tests that push frames without one).
+    public private(set) var lastLiveStartHostSeconds: Double?
 
     /// Writes what is buffered, closes the file and returns what was recorded.
     public func stopRecording() -> Recording? {
@@ -307,6 +373,10 @@ private final class Producer: @unchecked Sendable {
     let selected: [Int]
     let dropouts: AtomicInt64
     private var expectedSampleTime: Int64?
+    /// Frames accepted into the ring so far, and the host time of one of them, to place recordings in time.
+    private let anchorLock = NSLock()
+    private var acceptedFrames: Int64 = 0
+    private var anchor: (frame: Int64, hostSeconds: Double)?
 
     init(ring: PCMRingBuffer, selected: [Int], dropouts: AtomicInt64) {
         self.ring = ring
@@ -314,9 +384,23 @@ private final class Producer: @unchecked Sendable {
         self.dropouts = dropouts
     }
 
-    func push(_ deviceChannels: [UnsafePointer<Float>], frames: Int) {
+    func push(_ deviceChannels: [UnsafePointer<Float>], frames: Int, hostSeconds: Double? = nil) {
         let picked = selected.map { deviceChannels[min($0, deviceChannels.count - 1)] }
-        if !ring.write(picked, frames: frames) { dropouts.add(1) }
+        guard ring.write(picked, frames: frames) else {
+            dropouts.add(1)
+            return
+        }
+        anchorLock.withLock {
+            if let hostSeconds { anchor = (acceptedFrames, hostSeconds) }
+            acceptedFrames += Int64(frames)
+        }
+    }
+
+    /// Host time of the `index`th frame accepted into the ring.
+    func hostSeconds(ofFrame index: Int64, sampleRate: Double) -> Double? {
+        anchorLock.withLock {
+            anchor.map { Overdub.hostSeconds(ofFrame: index, anchorFrame: $0.frame, anchorHostSeconds: $0.hostSeconds, sampleRate: sampleRate) }
+        }
     }
 
     func push(_ buffer: AVAudioPCMBuffer, when: AVAudioTime) {
@@ -327,6 +411,7 @@ private final class Producer: @unchecked Sendable {
             expectedSampleTime = when.sampleTime + Int64(frames)
         }
         let count = Int(buffer.format.channelCount)
-        push((0..<count).map { UnsafePointer(data[$0]) }, frames: frames)
+        let host = when.isHostTimeValid ? Double.hostSeconds(when.hostTime) : nil
+        push((0..<count).map { UnsafePointer(data[$0]) }, frames: frames, hostSeconds: host)
     }
 }

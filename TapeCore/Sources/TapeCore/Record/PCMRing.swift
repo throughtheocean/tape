@@ -1,3 +1,4 @@
+import CoreAudio
 import Foundation
 
 /// Lock-free single producer, single consumer ring of deinterleaved float frames.
@@ -37,6 +38,24 @@ public final class PCMRingBuffer: @unchecked Sendable {
         for c in 0..<channelCount {
             (storage[c] + start).update(from: channels[c], count: first)
             if frames > first { storage[c].update(from: channels[c] + first, count: frames - first) }
+        }
+        written.store(w + Int64(frames))
+        return true
+    }
+
+    /// Producer side, without allocating (for the audio thread): ring channel `i` takes buffer `channels[i]` of
+    /// `list`. Refused when the ring has no room or a buffer is missing.
+    @discardableResult
+    public func write(_ list: UnsafeMutableAudioBufferListPointer, channels: [Int], frames: Int) -> Bool {
+        guard frames > 0 else { return true }
+        let w = written.load()
+        guard frames <= capacity - Int(w - read.load()), channels.allSatisfy({ $0 < list.count && list[$0].mData != nil }) else { return false }
+        let start = Int(w % Int64(capacity))
+        let first = min(frames, capacity - start)
+        for (i, c) in channels.enumerated() where i < channelCount {
+            let src = list[c].mData!.assumingMemoryBound(to: Float.self)
+            (storage[i] + start).update(from: src, count: first)
+            if frames > first { storage[i].update(from: src + first, count: frames - first) }
         }
         written.store(w + Int64(frames))
         return true

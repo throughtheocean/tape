@@ -261,6 +261,30 @@ final class TapeDocument: ObservableObject {
         return livePoint
     }
 
+    /// A recording made while playing: its first live frame lands at `liveAt`, the pre-roll stays hidden before the
+    /// region's start (trim the start out to reveal it), and it covers what lies under it on `track`. One undo step.
+    func addOverdub(fileName: String, result: RecordEngine.Recording, liveAt: Int64, track: UUID) {
+        let ref = SourceRef(name: fileName, location: .package(fileName: fileName), sampleRate: result.sampleRate,
+                            channelCount: result.channelCount, frameCount: result.frames, preRollFrames: result.preRollFrames)
+        apply("Record") { p in
+            if p.sessionRate == nil {
+                p.sessionRate = result.sampleRate
+                p.channelCount = result.channelCount
+            }
+            let rate = p.sessionRate!
+            p.sources.append(ref)
+            let trackId = p.track(track)?.id ?? p.tracks[0].id
+            let length = ref.sessionFrameCount(sessionRate: rate)
+            let early = max(0, -liveAt)
+            let sourceIn = min(ref.sessionPreRoll(sessionRate: rate) + early, length)
+            let region = Region(name: (fileName as NSString).deletingPathExtension, trackId: trackId, sourceId: ref.id,
+                                sourceIn: sourceIn, sourceOut: length, position: max(0, liveAt))
+            guard region.length > 0 else { return }
+            p.regions.append(region)
+            EditOperations.overwrite(&p, by: [region.id])
+        }
+    }
+
     // MARK: Processing and source housekeeping
 
     /// A new file name in `sources/` that does not exist yet.

@@ -1,0 +1,41 @@
+# M10b: R while playing records onto track 2 and playback keeps running. Track 1 is muted, so nothing is heard.
+wait 1
+clicks /tmp/tape-m10b-clicks.wav 10 0.5
+import /tmp/tape-m10b-clicks.wav
+waitLoaded
+fit
+key cmd+shift+m
+key cmd+t
+header 1 click mute
+header 2 click body
+set device MacBook
+set preroll 1
+set monitoring off
+wait 2.5
+latency
+locate f48000
+key space
+wait 1
+key r
+wait 2
+log overdub running
+key r
+wait 1
+waitLoaded
+log after overdub
+latency
+locate f120000
+wait 1
+key r
+wait 1
+key space
+wait 1
+waitLoaded
+log second take over the first, ended with Space
+key space
+log stopped
+key cmd+z
+log undo second take
+key cmd+z
+log undo first take
+quit

@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import TapeCore
 
-/// Top row: device, channels, bit depth, container, pre-roll, input meter, record button, elapsed.
+/// Top row: device, channels, bit depth, container, pre-roll, monitoring, input meter, record button, elapsed.
 struct RecordRow: View {
     @ObservedObject var recorder = RecordController.shared
     @ObservedObject var settings = AppSettings.shared
@@ -61,6 +61,21 @@ struct RecordRow: View {
             .frame(width: 118)
             .disabled(recorder.isRecording)
             .help("Seconds of input kept before R is pressed")
+
+            Picker("", selection: Binding(get: { settings.inputMonitoring }, set: { recorder.setMonitoring($0) })) {
+                ForEach(InputMonitoring.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            .labelsHidden()
+            .frame(width: 136)
+            .disabled(recorder.device == nil || recorder.isRecording)
+            .help("Through plays the selected input on the output. Use headphones: with speakers and a microphone it feeds back.")
+
+            if let ms = recorder.monitoringLatencyMs, recorder.device != nil {
+                Text(String(format: "%.1f ms", ms))
+                    .font(.system(size: 11).monospacedDigit())
+                    .foregroundStyle(settings.inputMonitoring == .through ? Color.tapePrimary : Color.tapeSecondary)
+                    .help("Round trip from input to output: input latency and buffer, output buffer and latency")
+            }
 
             if recorder.needsPermission {
                 Button("Allow Microphone") { recorder.requestPermission() }

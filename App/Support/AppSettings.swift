@@ -16,6 +16,13 @@ enum TimeDisplay: String, CaseIterable, Identifiable {
 }
 
 /// Which reading the loudness meter shows.
+/// What the input plays on the output while monitoring.
+enum InputMonitoring: String, CaseIterable {
+    case off, through
+
+    var title: String { self == .off ? "Monitor Off" : "Monitor Through" }
+}
+
 enum LoudnessMode: String, CaseIterable {
     case momentary, shortTerm, integrated
 
@@ -98,6 +105,11 @@ final class AppSettings: ObservableObject {
         didSet { defaults.set(preRollSeconds, forKey: "preRollSeconds") }
     }
 
+    /// Off, or the selected input channels routed to the output through the engine.
+    @Published var inputMonitoring: InputMonitoring {
+        didSet { defaults.set(inputMonitoring.rawValue, forKey: "inputMonitoring") }
+    }
+
     /// When the playhead is inside a region at R: place the recording right after that region
     /// instead of at the end of the document.
     @Published var recordSnapAfterRegion: Bool {
@@ -174,6 +186,7 @@ final class AppSettings: ObservableObject {
         recordSampleFormat = SampleFormat(rawValue: defaults.string(forKey: "recordSampleFormat") ?? "") ?? .int24
         preRollSeconds = defaults.object(forKey: "preRollSeconds") as? Double ?? 10
         recordSnapAfterRegion = defaults.object(forKey: "recordSnapAfterRegion") as? Bool ?? false
+        inputMonitoring = InputMonitoring(rawValue: defaults.string(forKey: "inputMonitoring") ?? "") ?? .off
         defaultFadeMs = defaults.object(forKey: "defaultFadeMs") as? Double ?? 10
         nudgeMs = defaults.object(forKey: "nudgeMs") as? Double ?? 10
     }

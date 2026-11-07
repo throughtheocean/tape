@@ -258,6 +258,21 @@ public final class PlaybackEngine: @unchecked Sendable {
         return start + advanced * spd
     }
 
+    /// The last buffer handed to the output: its first timeline frame and host time. Nil while stopped or before
+    /// the first buffer of a play.
+    public var renderAnchor: Overdub.RenderAnchor? {
+        guard isPlaying else { return nil }
+        for _ in 0..<4 {
+            let host = bufferHostTime.load()
+            let position = bufferPosition.load(), speed = bufferSpeed.load()
+            guard host != 0, bufferFrames.load() > 0 else { return nil }
+            if bufferHostTime.load() == host {
+                return Overdub.RenderAnchor(position: position, hostSeconds: Double.hostSeconds(UInt64(host)), speed: speed)
+            }
+        }
+        return nil
+    }
+
     /// Milliseconds from the last `play` call until its first frame was handed to the output unit.
     public private(set) var lastEngineLatencyMs: Double?
 

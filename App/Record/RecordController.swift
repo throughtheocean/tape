@@ -22,6 +22,8 @@ final class RecordController: ObservableObject {
 
     private var target: EditorController?
     private var placement: Int64 = 0
+    /// Recording over running playback: `placement` is where the first live frame belongs, playback keeps going.
+    private var overdub = false
     private var recordTrack = Track.firstID
     private var fileName = ""
     private var statusTimer: Timer?
@@ -71,6 +73,24 @@ final class RecordController: ObservableObject {
         restartInput()
     }
 
+    func setMonitoring(_ monitoring: InputMonitoring) {
+        guard !isRecording, monitoring != settings.inputMonitoring else { return }
+        settings.inputMonitoring = monitoring
+        restartInput()
+    }
+
+    // MARK: Latency
+
+    /// The selected input's latency, and the default output's (where playback and monitoring play).
+    var inputLatency: DeviceLatency? { device.map { AudioDevices.latency($0.id, input: true) } }
+    var outputLatency: DeviceLatency? { AudioDevices.defaultOutputDevice.map { AudioDevices.latency($0, input: false) } }
+
+    /// Round trip of Through monitoring, in milliseconds.
+    var monitoringLatencyMs: Double? {
+        guard let i = inputLatency, let o = outputLatency else { return nil }
+        return Overdub.monitoringSeconds(input: i, output: o) * 1000
+    }
+
     func setContainer(_ container: AudioContainer) {
         settings.recordContainer = container
         if !container.sampleFormats.contains(settings.recordSampleFormat) {
@@ -111,7 +131,8 @@ final class RecordController: ObservableObject {
             return
         }
         do {
-            try engine.startInput(device: device, channels: channels, preRollSeconds: settings.preRollSeconds)
+            try engine.startInput(device: device, channels: channels, preRollSeconds: settings.preRollSeconds,
+                                  through: settings.inputMonitoring == .through)
             sampleRate = engine.currentStatus().sampleRate
             startStatusTimer()
         } catch {
@@ -153,13 +174,17 @@ final class RecordController: ObservableObject {
             if inputError == nil { inputError = "Choose an input device to record." }
             return
         }
-        if editor.isPlaying { editor.stop() }
+        // R while playing at normal speed records over the running playback; otherwise playback stops first.
+        overdub = editor.isPlaying && editor.speed == 1 && editor.project.sessionRate != nil
+        if editor.isPlaying, !overdub { editor.stop() }
         let doc = editor.document
         let p = editor.playhead
         // Multitrack records onto the selected track (the first when none is selected); placement looks at that track only.
         let track = editor.selectedTrackID
         let onTrack = doc.project.regions(onTrack: track)
-        if let r = onTrack.first(where: { $0.position <= p && p < $0.end }) {
+        if overdub {
+            placement = p
+        } else if let r = onTrack.first(where: { $0.position <= p && p < $0.end }) {
             placement = settings.recordSnapAfterRegion ? r.end : (onTrack.map(\.end).max() ?? 0)
         } else {
             placement = p
@@ -175,7 +200,12 @@ final class RecordController: ObservableObject {
             try engine.startRecording(to: url, container: format.container, sampleFormat: format.sampleFormat)
         } catch {
             inputError = "Recording could not start: \(error.localizedDescription)"
+            overdub = false
             return
+        }
+        if overdub {
+            placement = overdubPlacement(editor)
+            editor.loopSuspended = true
         }
         target = editor
         editor.recordingTrack = recordTrack
@@ -193,14 +223,45 @@ final class RecordController: ObservableObject {
         target = nil
         editor?.recordingSpan = nil
         editor?.recordingTrack = nil
+        editor?.loopSuspended = false
+        let wasOverdub = overdub
+        overdub = false
         guard let result, let editor else { return }
         let track = editor.project.track(recordTrack) != nil ? recordTrack : editor.selectedTrackID
-        let start = editor.document.addRecording(fileName: fileName, result: result, at: placement, track: track)
-        editor.locate(start)
+        if wasOverdub {
+            editor.document.addOverdub(fileName: fileName, result: result, liveAt: placement, track: track)
+        } else {
+            let start = editor.document.addRecording(fileName: fileName, result: result, at: placement, track: track)
+            editor.locate(start)
+        }
         if result.dropouts > 0 {
             inputError = "\(result.dropouts) dropouts during the last recording."
         }
     }
+
+    /// Timeline frame of the first live frame of an overdub that just started: the input's stamp of that frame,
+    /// mapped through what playback was handing to the output, minus the input and output latency (`Overdub`).
+    private func overdubPlacement(_ editor: EditorController) -> Int64 {
+        let rate = editor.sessionRate
+        let input = inputLatency?.hardwareSeconds ?? 0, output = outputLatency?.hardwareSeconds ?? 0
+        let captured = engine.lastLiveStartHostSeconds ?? Double.hostSeconds(mach_absolute_time())
+        guard let render = editor.playback.renderAnchor else {
+            return max(0, editor.playback.position - Int64(((input + output) * rate).rounded()))
+        }
+        lastOverdub = OverdubLog(captured: captured, render: render, inputLatency: input, outputLatency: output,
+                                 stamped: engine.lastLiveStartHostSeconds != nil)
+        return Overdub.position(of: captured, render: render, inputLatency: input, outputLatency: output, sessionRate: rate)
+    }
+
+    /// The numbers behind the last overdub placement, for the self-test log.
+    struct OverdubLog {
+        var captured: Double
+        var render: Overdub.RenderAnchor
+        var inputLatency: Double
+        var outputLatency: Double
+        var stamped: Bool
+    }
+    private(set) var lastOverdub: OverdubLog?
 
     // MARK: Status
 
@@ -232,7 +293,8 @@ final class RecordController: ObservableObject {
         if status.dropouts != dropouts { dropouts = status.dropouts }
         if let editor = target {
             let session = editor.document.project.sessionRate ?? rate
-            let frames = Int64((Double(status.recordedFrames) * session / rate).rounded())
+            let recorded = overdub ? status.recordedFrames - status.preRollFrames : status.recordedFrames
+            let frames = Int64((Double(recorded) * session / rate).rounded())
             editor.recordingSpan = SampleRange(start: placement, end: placement + frames)
         }
     }

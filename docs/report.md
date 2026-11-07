@@ -982,3 +982,69 @@ The M4 process script gives the same results as before. Only the playhead positi
 1. Export presets with "As source" channels (the three WAV presets and both Octatrack chains) now write stereo for a document that started mono, because the session is stereo. For the Octatrack a mono chain uses half the memory. Proposal: leave it, the "Mono" choice in the export sheet is one click; or set the Octatrack presets to mono. Your call.
 2. Sessions recorded with more than two channels keep their channel count, and pan does not apply to them. "Always stereo" would fold such a recording down to its first two channels on playback. I did not want to lose channels silently.
 3. A preview that jumps (loop wrap, a click elsewhere) restarts the unit at the jump with one slice of run-in. Apply processes from the range start, so the first moments after a jump can differ slightly from the applied result. The preview loops over the range, so a wrap lands on the range start, where the two agree.
+
+## M10b: Overdub and input monitoring
+
+### What it does
+
+- R while the transport runs (at 1x) starts recording onto the selected track without stopping playback. In the single view that is the shown track. The other tracks keep playing with mute, solo and Only as they are. While the take runs, its span grows in red from the place it will land.
+- Stop with R or Space ends the recording and playback keeps running. A second Space stops playback.
+- The new region is placed where the first live frame belongs. The pre-roll ring buffer works as before: its frames are in the file, hidden before the region start, and can be revealed by trimming left.
+- An overdub replaces what lies underneath on its track (the M10a overwrite rule), one undo step "Record". Undo restores the earlier take in full.
+- A loop is suspended while an overdub runs, so the take is one straight pass. It is back when the recording stops.
+- Input monitoring is a setting in the record row next to pre-roll: "Monitor Off" or "Monitor Through", with the round trip in ms beside it. Through plays the selected input channels on the default output (a mono channel on both sides). It can be changed while not recording.
+- R while stopped, or while playing at another speed than 1x, behaves as before: playback stops and the take is placed at the playhead (or after the region under it).
+
+### Placement
+
+The spec says: playhead minus input latency, `kAudioDevicePropertyLatency` plus safety offset plus the engine's buffer. What Tape does is the same idea with timestamps, and the buffer is not added. The reasons:
+
+- The input tap stamps every buffer with the host time at which its first frame entered the device's IO cycle. The IO buffer is already inside that stamp; adding it again would place every take one buffer (10.7 ms at 512 frames) too early.
+- Playback reports the timeline frame it handed to the output at a host time (`PlaybackEngine.renderAnchor`). What the player hears is that frame one output latency later. A take aligned to the render position would land late by the output latency, so it is subtracted as well.
+
+So: `position = renderFrame(at: stamp of first live frame - input latency - output latency)`, with input latency = device latency + safety offset + stream latency of the input, output latency the same for the default output. This is `Overdub.position` in TapeCore. The loopback test below is what decides whether this is right on your hardware.
+
+Latency numbers reported by the HAL here, at 48 kHz, 512 frame buffer:
+
+| Device | Latency | Safety | Stream | Total without buffer |
+|---|---|---|---|---|
+| Babyface Pro, input | 11 | 24 | 0 | 0.73 ms |
+| Babyface Pro, output | 17 | 24 | 0 | 0.85 ms |
+| MacBook Pro Microphone | 0 | 50 | 2399 | 51.02 ms |
+
+Through monitoring round trip shown in the row: Babyface 22.9 ms (two buffers plus the above), MacBook microphone 73.2 ms.
+
+### Monitoring on two engines
+
+An `AVAudioEngine` on macOS drives its input and output through one device unit: with the input on the MacBook microphone, the output went to the microphone device too, and the engine with Through did not start. So Through plays on a second, output only engine on the default output, fed from a short ring buffer filled by a sink on the input engine. When input and output are different devices, their clocks drift; the ring drops or pads a few frames now and then, which can click in the monitor. The recording itself is not affected. With the same device for input and output (the Babyface), there is no drift.
+
+### Tests
+
+115 TapeCore tests, 5 skipped, 0 failures. New, `OverdubTests`:
+
+- Placement against a fake device: input 10 ms, output 5 ms, render anchor at frame 96000, a first live frame captured 0.5 s after the anchor: position 96000 + 24000 - 720 = 119280.
+- The host time of the first live frame after a pre-roll of 12288 frames, from the tap's anchor.
+- An input at 44.1 kHz in a 48 kHz session.
+- The device latency in seconds (latency, safety offset and stream latency), the buffer kept apart from it, and the monitoring round trip.
+
+### Tested by hand
+
+- `scripts/selftest/m10b-overdub.txt` (MacBook microphone, track 1 muted, so nothing is heard): play from 1 s, R after 1 s, record 2 s, R. Playback was still running. The take landed on track 2 at frame 93508. Log of the placement: render frame 98688 at host 120700.844461, first live frame stamped 120700.788424 (56.04 ms earlier), minus 51.02 + 0.85 ms: 93508. A second take started 0.5 s into the first and ended with Space: playback kept running, the first take was trimmed to end exactly where the second starts. Two undos remove both takes, the first one undo restores the first take in full.
+- `scripts/selftest/m10b-through.txt` (volume 0, so nothing is heard): Through started, played 95232 frames in 2 s on the Babyface while capturing from the MacBook microphone. Off stops it.
+- Regressions: `m2-record`, `m6-record` and `m10a-only-drop-overlap` give the same results as before.
+- The measuring command for the loopback test was checked with a copy of the click track placed 150 ms late on track 2: all 20 clicks read 150.000 ms.
+
+### Loopback test, for you
+
+I do not play audio here, so the 1 ms check is yours. `scripts/selftest/m10b-loopback.txt`:
+
+1. Route the Babyface's main output back into an input (TotalMix loopback on the input, or a cable) and pick that input channel in Tape's record row.
+2. `scripts/selftest.sh scripts/selftest/m10b-loopback.txt 60`. It plays a click every 0.5 s on track 1, overdubs 6 s onto track 2 and prints a line `loopback: ... offsets ms ..., median ... ms`, plus the latency figures used.
+3. A median within ±1 ms is the target. If it is off by about 10.7 ms, the buffer belongs in the formula after all (the HAL stamps would then mean something other than the documentation says), and it is a one line change.
+
+### Deviations, with reasons
+
+1. The engine buffer is not added to the input latency, and the output latency is subtracted (see Placement). Proposal: keep, confirm with the loopback number.
+2. Overdub at speeds other than 1x stops playback and records as before. The take can't be in time at another speed.
+3. A loop is suspended during an overdub. Loop recording into takes is not in the spec; the idea is in `docs/v2.md`.
+4. Through monitoring uses a second engine on the default output (see above), so it can click when input and output are different devices.

@@ -49,6 +49,27 @@ public enum AudioDevices {
     public static var defaultInputDevice: AudioDeviceID? { systemDevice(kAudioHardwarePropertyDefaultInputDevice) }
     public static var defaultOutputDevice: AudioDeviceID? { systemDevice(kAudioHardwarePropertyDefaultOutputDevice) }
 
+    /// The device's latency on its input or output side. Missing properties count as 0.
+    public static func latency(_ id: AudioDeviceID, input: Bool) -> DeviceLatency {
+        let scope = input ? kAudioDevicePropertyScopeInput : kAudioDevicePropertyScopeOutput
+        func value(_ selector: AudioObjectPropertySelector, _ object: AudioObjectID? = nil) -> Int {
+            let s = object == nil ? scope : kAudioObjectPropertyScopeGlobal
+            var address = AudioObjectPropertyAddress(mSelector: selector, mScope: s, mElement: kAudioObjectPropertyElementMain)
+            var v = UInt32(0)
+            var size = UInt32(MemoryLayout<UInt32>.size)
+            return AudioObjectGetPropertyData(object ?? id, &address, 0, nil, &size, &v) == noErr ? Int(v) : 0
+        }
+        var address = AudioObjectPropertyAddress(mSelector: kAudioDevicePropertyStreams, mScope: scope, mElement: kAudioObjectPropertyElementMain)
+        var stream = AudioStreamID(0)
+        var size = UInt32(MemoryLayout<AudioStreamID>.size)
+        let hasStream = AudioObjectGetPropertyData(id, &address, 0, nil, &size, &stream) == noErr && stream != 0
+        return DeviceLatency(deviceFrames: value(kAudioDevicePropertyLatency), safetyFrames: value(kAudioDevicePropertySafetyOffset),
+                             streamFrames: hasStream ? value(kAudioStreamPropertyLatency, stream) : 0,
+                             bufferFrames: value(kAudioDevicePropertyBufferFrameSize), sampleRate: nominalRate(id))
+    }
+
+    public static func name(_ id: AudioDeviceID) -> String? { string(id, kAudioObjectPropertyName) }
+
     private static func systemDevice(_ selector: AudioObjectPropertySelector) -> AudioDeviceID? {
         var address = AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal,
                                                  mElement: kAudioObjectPropertyElementMain)

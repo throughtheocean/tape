@@ -413,8 +413,13 @@ final class EditorController: ObservableObject {
         needsDisplay?()
     }
 
+    /// Set while recording over running playback: the recording runs on in a line, so playback must not wrap.
+    var loopSuspended = false {
+        didSet { if oldValue != loopSuspended { updateLoop() } }
+    }
+
     private func currentLoop() -> SampleRange? {
-        guard loopEnabled else { return nil }
+        guard loopEnabled, !loopSuspended else { return nil }
         if let range, !range.isEmpty { return range }
         return documentLength > 0 ? SampleRange(start: 0, end: documentLength) : nil
     }
