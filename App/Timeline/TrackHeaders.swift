@@ -505,7 +505,7 @@ final class MasterStripView: NSView {
 
     func refresh() {
         let m = editor.masterMeters
-        var key = [Int((editor.project.master.gainDB * 100).rounded()), editor.project.channelCount]
+        var key = [Int((editor.project.master.gainDB * 100).rounded()), editor.project.mixChannelCount]
         for c in m { key += [Int((c.levelDB * 4).rounded()), Int((c.holdDB * 4).rounded()), c.clipped ? 1 : 0] }
         guard key != drawn else { return }
         drawn = key
@@ -526,7 +526,7 @@ final class MasterStripView: NSView {
         HeaderDrawing.slider(gainRect, position: Fader.position(dB: gain), color: Theme.accent, centered: false,
                              mark: Fader.position(dB: 0))
         HeaderDrawing.text(Fader.text(gain), in: gainText, align: .right)
-        let channels = editor.project.channelCount >= 2 ? 2 : 1
+        let channels = editor.project.mixChannelCount >= 2 ? 2 : 1
         for c in 0..<channels {
             let m = editor.masterMeters[c]
             HeaderDrawing.meter(meterRect(c), levelDB: m.levelDB, holdDB: m.holdDB, clipped: m.clipped, vertical: false)

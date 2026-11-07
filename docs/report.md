@@ -938,3 +938,47 @@ Not tested: a real Finder drag with Option held, and the Only toggle's look. Bot
 2. A plain drag over another region trims it live during the drag, so you hear and see the result before letting go. Dragging back off restores it, because each step starts from the state before the drag.
 3. The AU effect previews (Compressor, Limiter) play through the master. With the selected-track scope, the preview of those two still affects every track that plays. The rendered result is correct. Processes rendered in Tape (Normalize, Gain and the others) preview correctly per track.
 4. Up/Down are menu items with bare arrow keys. Like the other single keys, they are disabled while a text field edits.
+
+### M10a follow-up: stereo sessions, pan at unity, AU preview per track
+
+Maik's decisions on the M10a report: 1. always stereo, with the constant power pan law at unity at centre for mono regions; 2. the Compressor and Limiter preview only on the target track, before its gain and pan; 3. the live trim while dragging stays.
+
+#### Stereo sessions and the pan law
+
+- Every session plays and renders in stereo (`Project.mixChannelCount`): playback, export "As session", stems, the meters, loudness, the transport ("Stereo") and the inspector. `channelCount` in the file is unchanged, so old documents load as they were.
+- Mono regions: constant power scaled to unity at centre, √2 · cos and √2 · sin. Centred, both channels are exactly the source level. Hard left is +3.01 dB on the left. Stereo regions keep the balance law.
+- Consequence: the M6 change for mono regions in stereo sessions (-3.01 dB at centre) is gone. All three M5 fixtures (stereo, mono, mixed) now play sample identical to their M5 renders, a mono one on both channels.
+- Mono stays in the export format: "Mono" averages the two channels, so a centred mono region exports at its source level.
+- `docs/datenmodell.md` is updated.
+
+#### Compressor and Limiter preview
+
+The insert after the master is removed from the engine. The preview now works like the other previews: each target region (the selected track's, or every track's with "All tracks in range") plays through its own Audio Unit as it is read, before region gain and fades and the track's gain and pan. The other regions and tracks play untouched. This is `LiveAUSource`, a sample source that wraps the original. It renders in the same 4096 frame slices as Apply, with the same latency compensation and the same 2 ms crossfade at the edges of a partial range. Apple's dynamics processor gives a different result for a different slicing, so this matters. Parameter changes are heard live, as before. It fit well within the day you allowed, so it did not wait for M10b.
+
+#### Tests
+
+111 TapeCore tests, 5 skipped, 0 failures. New or changed:
+
+- `testMonoPanCentreIsUnityAndHardLeftIsPlusThreeDB`: a mono region at centre renders both channels at exactly the source level (sample equal). Hard left is √2 on the left and silence on the right. Power is constant at four positions in between.
+- `testVersionOneDocumentsPlayAsInM5AndSaveAsVersionTwo`: all three M5 fixtures are sample identical again, in stereo.
+- `testMeterReportsMinusSixDBFS`: the hard-left test tone is 3.01 dB lower, so the meter still has to read -6.
+- `LiveAUSourceTests`: the live Compressor (stereo, full range; mono, a range starting off a block boundary) and the live Limiter (stereo, partial, with its 12 ms lookahead) match Apply's offline render within 1e-6 in 512 frame reads. A jump restarts the unit like the first pass.
+
+#### Tested by hand
+
+New script `scripts/selftest/m10a-au-preview.txt`: A on track 1, B on track 2, a range of 2 s, track 2 selected, Compressor at -40 dB threshold.
+
+| | Track 1 | Track 2 |
+|---|---|---|
+| Before | -5.99 LUFS | -12.68 LUFS, peak -12.0 |
+| Preview | -5.99 LUFS (unchanged) | -35.83 LUFS, peak -14.42 |
+| Preview, threshold -20 (live change) | | -16.83 LUFS |
+| After Apply at -40 | -5.99 LUFS | -35.85 LUFS, peak -14.42 |
+
+The M4 process script gives the same results as before. Only the playhead positions during previews differ, which depend on timing.
+
+#### Deviations, with reasons
+
+1. Export presets with "As source" channels (the three WAV presets and both Octatrack chains) now write stereo for a document that started mono, because the session is stereo. For the Octatrack a mono chain uses half the memory. Proposal: leave it, the "Mono" choice in the export sheet is one click; or set the Octatrack presets to mono. Your call.
+2. Sessions recorded with more than two channels keep their channel count, and pan does not apply to them. "Always stereo" would fold such a recording down to its first two channels on playback. I did not want to lose channels silently.
+3. A preview that jumps (loop wrap, a click elsewhere) restarts the unit at the jump with one slice of run-in. Apply processes from the range start, so the first moments after a jump can differ slightly from the applied result. The preview loops over the range, so a wrap lands on the range start, where the two agree.

@@ -115,7 +115,7 @@ extension EditorController {
               let source = document.loaded[region.sourceId]?.source else { return frame }
         let whole = Region(name: "", sourceId: region.sourceId, sourceIn: 0, sourceOut: source.frameCount,
                            position: region.position - region.sourceIn)
-        let list = EditList(regions: [whole], sources: [region.sourceId: source], channelCount: project.channelCount)
+        let list = EditList(regions: [whole], sources: [region.sourceId: source], channelCount: project.mixChannelCount)
         let radius = Int(min(max(4 * samplesPerPoint, 1), sessionRate * 0.01))
         return ZeroCrossing.nearest(in: list, around: frame, radius: radius)
     }

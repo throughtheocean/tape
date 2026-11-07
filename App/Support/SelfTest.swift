@@ -483,8 +483,14 @@ final class SelfTest {
             ?? (selected.isEmpty ? nil : SampleRange(start: selected.map(\.start).min()!, end: selected.map(\.end).max()!))
             ?? SampleRange(start: 0, end: e.documentLength)
         guard !span.isEmpty else { return }
-        // "measure playback ...": the list playback hears (Only applied), else the document's as export renders it.
-        let list = label.hasPrefix("playback") ? e.playbackList() : c.tapeDocument.editList()
+        // "measure playback ...": the list playback hears (Only applied); "measure engine [trackN] ...": the list the
+        // engine plays now (a preview's), optionally one track's stem; else the document's as export renders it.
+        var list = label.hasPrefix("playback") ? e.playbackList()
+            : label.hasPrefix("engine") ? e.playback.currentEditList : c.tapeDocument.editList()
+        let words = label.split(separator: " ")
+        if words.count > 1, words[1].hasPrefix("track"), let n = Int(words[1].dropFirst(5)), e.project.tracks.indices.contains(n - 1) {
+            list = list.stem(e.project.tracks[n - 1].id)
+        }
         let out = SampleBuffer(channelCount: list.channelCount, capacity: Int(span.length))
         EditListRenderer().render(list, start: span.start, frames: Int(span.length), into: out)
         let buffer = AudioBuffer(channels: out.toArrays(count: Int(span.length)), sampleRate: e.sessionRate)

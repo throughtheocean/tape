@@ -1,0 +1,33 @@
+# M10a follow-up: the compressor preview processes only the target track, before its gain and pan, as Apply does.
+# Sources: /tmp/tape-m6-a.wav on track 1, /tmp/tape-m6-b.wav on track 2 (see M6).
+wait 1
+key cmd+shift+m
+drop 300 mid /tmp/tape-m6-a.wav /tmp/tape-m6-b.wav
+waitLoaded
+fit
+mouse click f340000 wave:2
+mouse down f24000 wave:2 shift
+mouse drag f120000 wave:2 shift
+mouse up f120000 wave:2 shift
+measure engine track1 before
+measure engine track2 before
+menu Compressor...
+wait 0.5
+param threshold -40
+preview on
+wait 1.5
+log compressor preview on track 2
+measure engine track1 in preview, unchanged
+measure engine track2 in preview, compressed
+param threshold -20
+wait 0.5
+measure engine track2 in preview at -20, live parameter change
+param threshold -40
+wait 0.5
+preview off
+sheet return
+waitApply
+log applied
+measure engine track1 after apply
+measure engine track2 after apply, equal to the preview at -40
+quit

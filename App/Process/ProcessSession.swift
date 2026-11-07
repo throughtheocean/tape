@@ -79,7 +79,8 @@ final class ProcessSession: ObservableObject {
     @Published private(set) var previewing = false
     @Published private(set) var status = ""
     @Published private(set) var isApplying = false
-    private var previewUnit: AVAudioUnitEffect?
+    /// The AU previews' sources, one per target region, for live parameter changes.
+    private var liveSources: [LiveAUSource] = []
     private var previewTask: Task<Void, Never>?
     private let previewDebounce = Debouncer(delay: 0.12)
     private let cancelFlag = AtomicInt64(0)
@@ -199,13 +200,32 @@ final class ProcessSession: ObservableObject {
 
     private func startPreview() {
         if let au = auProcess {
-            let unit = au.makeUnit()
-            previewUnit = unit
+            // Each target region plays through its own unit, before region gain and fades and the track's gain and
+            // pan, so the preview sounds like Apply in the mix. The other regions and tracks play untouched.
+            let list = editor.playbackList()
+            var sources = list.sources
+            var replaced: [UUID: Region] = [:]
             do {
-                try editor.playback.setInsert(unit)
+                for target in targets {
+                    let r = target.region
+                    guard let base = list.sources[r.sourceId] else { continue }
+                    let fade = target.partial ? Int((ProcessApplier.crossfadeSeconds * editor.sessionRate).rounded()) : 0
+                    let live = try LiveAUSource(base: base, processed: target.sourceRange, process: au,
+                                                sampleRate: editor.sessionRate, crossfade: fade)
+                    let id = UUID()
+                    sources[id] = live
+                    liveSources.append(live)
+                    var copy = r
+                    copy.sourceId = id
+                    replaced[r.id] = copy
+                }
             } catch {
                 status = "Preview failed: \(error.localizedDescription)"
+                liveSources = []
+                return
             }
+            let regions = editor.project.regions.compactMap { replaced[$0.id] ?? (list.sources[$0.sourceId] != nil ? $0 : nil) }
+            editor.playback.setEditList(list.with(regions: regions, sources: sources))
             editor.previewPlay(previewSpan)
         } else {
             rebuildPreview(play: true)
@@ -214,15 +234,14 @@ final class ProcessSession: ObservableObject {
 
     private func stopPreview() {
         previewTask?.cancel()
-        try? editor.playback.setInsert(nil)
-        previewUnit = nil
+        liveSources = []
         editor.endPreview()
     }
 
     private func parametersChanged() {
         guard previewing else { return }
-        if let unit = previewUnit, let au = auProcess {
-            au.apply(to: unit)
+        if let au = auProcess {
+            for live in liveSources { live.setParameters(au) }
         } else {
             previewDebounce.schedule { [weak self] in self?.rebuildPreview(play: false) }
         }

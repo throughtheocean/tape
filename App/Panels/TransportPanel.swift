@@ -79,7 +79,7 @@ struct TransportPanel: View {
         guard let rate = document.project.sessionRate else { return "No audio" }
         let khz = rate / 1000
         let rateString = khz == khz.rounded() ? String(format: "%.0f kHz", khz) : String(format: "%.1f kHz", khz)
-        let ch = document.project.channelCount
+        let ch = document.project.mixChannelCount
         return "\(rateString)  \(ch == 1 ? "Mono" : ch == 2 ? "Stereo" : "\(ch) ch")"
     }
 }

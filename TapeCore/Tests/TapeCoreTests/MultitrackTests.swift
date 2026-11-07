@@ -22,7 +22,9 @@ final class MultitrackTests: XCTestCase {
 
     // MARK: Pan law
 
-    func testMonoPanCentreIsMinusThreeDBAndHardLeftIsFull() {
+    /// Constant power with unity at centre: a centred mono region renders both channels at exactly the source level,
+    /// a hard pan puts it +3 dB on one side, and power stays constant in between.
+    func testMonoPanCentreIsUnityAndHardLeftIsPlusThreeDB() {
         let (id, src) = source([ramp(0.8)])
         let track = Track(name: "A")
         let region = Region(name: "r", trackId: track.id, sourceId: id, sourceIn: 0, sourceOut: Int64(n), position: 0)
@@ -32,18 +34,20 @@ final class MultitrackTests: XCTestCase {
             return render(EditList(regions: [region], sources: [id: src], channelCount: 2, tracks: [t]))
         }
         let centre = out(0)
-        let g = Float(pow(10, -3.0103 / 20))
-        for i in 0..<n {
-            XCTAssertEqual(centre[0][i], src.samples[0][i] * g, accuracy: 1e-6)
-            XCTAssertEqual(centre[1][i], src.samples[0][i] * g, accuracy: 1e-6)
-        }
+        XCTAssertEqual(centre[0], src.samples[0], "centre is the source level, exactly")
+        XCTAssertEqual(centre[1], src.samples[0], "centre is the source level, exactly")
         let left = out(-1)
+        let g = Float(2.0.squareRoot())
         for i in 0..<n {
-            XCTAssertEqual(left[0][i], src.samples[0][i], accuracy: 1e-6)
+            XCTAssertEqual(left[0][i], src.samples[0][i] * g, accuracy: 1e-6)
             XCTAssertEqual(left[1][i], 0, accuracy: 1e-7)
         }
         let right = out(1)
         XCTAssertEqual(right[0].map(abs).max()!, 0, accuracy: 1e-7)
+        for pan in [-0.7, -0.3, 0.2, 0.9] {
+            let (l, r) = TrackMix.panGains(pan: pan, sourceChannels: 1)
+            XCTAssertEqual(l * l + r * r, 2, accuracy: 1e-5, "constant power at pan \(pan)")
+        }
     }
 
     func testStereoBalanceAttenuatesOneSide() {
@@ -286,22 +290,11 @@ final class MultitrackTests: XCTestCase {
             let now = try engine.renderManual(frames: Int(list.length))
             engine.shutdown()
             let m5 = try TestAudio.read(fixtures.appendingPathComponent("\(name)-render.caf"))
-            XCTAssertEqual(now.count, m5.count)
+            // Every session plays in stereo now; a mono M5 session plays its channel on both sides.
+            XCTAssertEqual(now.count, 2)
             XCTAssertEqual(now[0].count, m5[0].count)
-
-            if name == "m5-mixed" {
-                // A mono region in a stereo session now goes through the pan law: -3.01 dB per side at centre.
-                let mono = file.document.regions.first { $0.name == "mono" }!
-                let g = Float(sqrt(0.5))
-                for c in 0..<2 {
-                    for i in 0..<now[c].count {
-                        let expected = i >= Int(mono.position) ? m5[c][i] * g : m5[c][i]
-                        XCTAssertEqual(now[c][i], expected, accuracy: 1e-6, "\(name) channel \(c) frame \(i)")
-                        if abs(now[c][i] - expected) > 1e-6 { break }
-                    }
-                }
-            } else {
-                for c in 0..<m5.count { XCTAssertEqual(now[c], m5[c], "\(name) channel \(c) is sample identical") }
+            for c in 0..<2 {
+                XCTAssertEqual(now[c], m5[min(c, m5.count - 1)], "\(name) channel \(c) is sample identical")
             }
 
             try package.save(file)
@@ -316,7 +309,8 @@ final class MultitrackTests: XCTestCase {
 
     func testMeterReportsMinusSixDBFS() throws {
         let rate = 48000.0
-        let amplitude = Float(pow(10, -6.0 / 20))
+        // Hard left puts a mono source +3.01 dB on the left: a tone at -9.01 dBFS meters -6.
+        let amplitude = Float(pow(10, (-6.0 - 3.0103) / 20))
         let tone = (0..<48000).map { amplitude * Float(sin(2 * Double.pi * 1000 * Double($0) / rate)) }
         let (id, src) = source([tone])
         let t = TrackMix(id: UUID(), pan: -1)

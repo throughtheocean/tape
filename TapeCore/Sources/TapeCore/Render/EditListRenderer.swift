@@ -25,13 +25,15 @@ public struct TrackMix: Equatable, Sendable {
     public var gain: Float { gainDB <= Track.silentDB ? 0 : Float(pow(10, gainDB / 20)) }
 
     /// Per output channel gain for a source with `sourceChannels` into two output channels.
-    /// Mono sources pan with constant power (-3 dB each side at centre). Stereo sources are balanced:
-    /// the side away from the pan is attenuated along a quarter cosine, the other stays at unity.
+    /// Mono sources pan with constant power, scaled to unity at centre: both sides at the source level there,
+    /// +3 dB on the near side and silence on the far side at a hard pan. Stereo sources are balanced: the side away
+    /// from the pan is attenuated along a quarter cosine, the other stays at unity.
     public static func panGains(pan: Double, sourceChannels: Int) -> (Float, Float) {
         let p = min(max(pan, -1), 1)
         if sourceChannels == 1 {
+            if p == 0 { return (1, 1) }
             let theta = (p + 1) * .pi / 4
-            return (Float(cos(theta)), Float(sin(theta)))
+            return (Float(cos(theta) * 2.0.squareRoot()), Float(sin(theta) * 2.0.squareRoot()))
         }
         if p > 0 { return (Float(cos(p * .pi / 2)), 1) }
         if p < 0 { return (1, Float(cos(-p * .pi / 2))) }
@@ -72,7 +74,7 @@ public struct EditList: @unchecked Sendable {
     /// The whole project through the mix; regions whose source is not in `sources` are left out.
     public init(project: Project, sources: [UUID: SampleSource]) {
         self.init(regions: project.regions.filter { sources[$0.sourceId] != nil }, sources: sources,
-                  channelCount: project.channelCount, tracks: project.tracks.map(TrackMix.init),
+                  channelCount: project.mixChannelCount, tracks: project.tracks.map(TrackMix.init),
                   masterGainDB: project.master.gainDB)
     }
 

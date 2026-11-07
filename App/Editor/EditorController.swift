@@ -182,7 +182,7 @@ final class EditorController: ObservableObject {
 
     private func configureEngineIfNeeded() {
         guard let rate = document.project.sessionRate else { return }
-        let format = (rate, document.project.channelCount)
+        let format = (rate, document.project.mixChannelCount)
         if let configuredFormat, configuredFormat == format { return }
         do {
             try playback.configure(sessionRate: rate, channelCount: format.1)

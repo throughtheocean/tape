@@ -199,6 +199,10 @@ public struct Project: Equatable, Sendable {
 
     public var length: Int64 { regions.map(\.end).max() ?? 0 }
 
+    /// Channels the mix renders and plays: always stereo, whatever the first source had. `channelCount` keeps the
+    /// first source's count; sessions recorded with more than two channels keep them.
+    public var mixChannelCount: Int { max(2, channelCount) }
+
     public func source(_ id: UUID) -> SourceRef? { sources.first { $0.id == id } }
 
     public func track(_ id: UUID) -> Track? { tracks.first { $0.id == id } }

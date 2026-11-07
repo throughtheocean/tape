@@ -116,7 +116,7 @@ final class ExportSession: ObservableObject {
         let jobs = plannedJobs
         let rate = editor.sessionRate
         let seconds = jobs.reduce(0.0) { $0 + Double($1.span.length) / max(rate, 1) }
-        let files = jobs.count * (settings.layout == .split ? settings.layout.fileChannels(session: editor.project.channelCount).count : 1)
+        let files = jobs.count * (settings.layout == .split ? settings.layout.fileChannels(session: editor.project.mixChannelCount).count : 1)
         let names = jobs.prefix(3).map { $0.urls(settings).map(\.lastPathComponent).joined(separator: ", ") }.joined(separator: ", ")
         let more = jobs.count > 3 ? ", ..." : ""
         return "\(files) file\(files == 1 ? "" : "s"), \(String(format: "%.1f", seconds)) s: \(names)\(more)"

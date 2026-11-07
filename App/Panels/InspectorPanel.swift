@@ -77,7 +77,7 @@ struct InspectorPanel: View {
                 section("Document") {
                     row("Name", document.displayName)
                     row("Session rate", document.project.sessionRate.map { String(format: "%g Hz", $0) } ?? "None")
-                    row("Channels", "\(document.project.channelCount)")
+                    row("Channels", "\(document.project.mixChannelCount)")
                     row("Length", format.string(document.project.length))
                     row("Regions", "\(document.project.regions.count)")
                 }

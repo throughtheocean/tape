@@ -31,11 +31,15 @@ Stems render one track alone with its gain and pan, without the master gain, sol
 
 ## Pan law and track output
 
+Every session plays and renders in stereo, whatever the first source had (`Project.mixChannelCount`). `channelCount` keeps the first source's count; a session recorded with more than two channels keeps them, and pan applies only to two output channels. Mono files are a choice in the export format ("Mono" averages the two channels), not a property of the session.
+
 Every track mixes to stereo.
 
-- Mono regions go through pan with a constant power law, -3 dB at centre: left gain cos(θ), right gain sin(θ), θ = (pan + 1) · π/4. At pan 0 both sides are 0.7071 (-3.01 dB); at -1 left is unity and right is silent.
+- Mono regions go through pan with a constant power law, scaled to unity at centre: left gain √2 · cos(θ), right gain √2 · sin(θ), θ = (pan + 1) · π/4. At pan 0 both sides are exactly the source level, so a centred mono file sounds as loud as it did before tracks and stereo sessions existed. At -1 left is +3.01 dB and right is silent. Left² + right² stays 2 at every pan position.
 - Stereo regions go through balance: the side away from the pan is attenuated along a quarter cosine, cos(|pan| · π/2); the near side stays at unity. At pan 0 both sides are unity.
 
 The pan law is fixed. It is not a setting, per document or otherwise.
 
-Exception today: a session whose first audio was mono has `channelCount` 1 and renders mono. Pan does not apply there, and a stereo region in such a session plays its left channel only. See the M10a report for the proposal.
+## Process previews
+
+Previews play the document's mix with the target regions swapped for processed copies, so region gain and fades, the track's gain and pan, mute, solo and the master all apply after the process, as after Apply. Processes rendered in Tape (Normalize, Gain and the others) render the copies into memory. The Compressor and Limiter run live: each target region plays through its own Audio Unit as it is read (`LiveAUSource`), in the same 4096 frame slices, with the same latency compensation and the same 2 ms edge crossfade for a partial range as Apply. There is no insert on the master.

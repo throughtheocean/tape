@@ -191,8 +191,8 @@ extension EditorController {
     @discardableResult
     func updateMeters(now: Double) -> Bool {
         let peaks = playback.meters.drain()
-        if loudness.sampleRate != sessionRate || loudness.channels.count != project.channelCount {
-            loudness = ChannelLoudness(sampleRate: sessionRate, channelCount: project.channelCount)
+        if loudness.sampleRate != sessionRate || loudness.channels.count != project.mixChannelCount {
+            loudness = ChannelLoudness(sampleRate: sessionRate, channelCount: project.mixChannelCount)
         }
         if isPlaying, !loudnessWasPlaying { loudness.reset() }
         for e in peaks?.loudness ?? [] { loudness.add(energies: e.energies, frames: e.frames) }
@@ -211,7 +211,7 @@ extension EditorController {
             trackMeters = trackMeters.filter { ids.contains($0.key) }
         }
         for c in masterMeters.indices {
-            let channel = min(c, project.channelCount - 1)
+            let channel = min(c, project.mixChannelCount - 1)
             masterMeters[c].update(peak: peaks?.master[channel] ?? 0, now: now)
             active = active || masterMeters[c].levelDB > MeterBallistics.floorDB || masterMeters[c].holdDB > MeterBallistics.floorDB
         }
