@@ -14,6 +14,12 @@ enum Theme {
     /// Selected row or header on chrome.
     static let selection = NSColor(white: 0.17, alpha: 1)
     static let separator = NSColor(white: 1, alpha: 0.08)
+    /// Every second row of a list on canvas.
+    static let rowAlternate = NSColor(white: 1, alpha: 0.035)
+    /// Row under the mouse, one step above `rowAlternate`.
+    static let rowHover = NSColor(white: 1, alpha: 0.07)
+    /// Opacity of the accent when it fills a selected row; text keeps its colors.
+    static let selectionFillAlpha: CGFloat = 0.15
 
     static let primaryText = NSColor(white: 1, alpha: 0.9)
     static let secondaryText = NSColor(white: 1, alpha: 0.55)
