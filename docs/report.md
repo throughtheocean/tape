@@ -1126,3 +1126,16 @@ Deviation 3 is corrected. A magnetic sequence no longer starts at 0:
 Test: `testSequenceStartsAtTheFirstRegionAndMovesWithItInTime` (a take at 9 s made magnetic stays at 9 s; the first region dragged 500 later and back to 0 takes the rest along; moving the whole sequence moves the start; reorder, a drop in front and deleting the first keep it; an empty track starts at its first region; the start survives saving). 126 TapeCore tests, 5 skipped, 0 failures.
 
 By hand, `m10c-magnetic.txt` with a new step: the first region on the magnetic track dragged 1 s later moved the sequence to start at 48000 (a 48000, b 240000, a 384000). Making track 2 magnetic now leaves its region at 58000, where it was, instead of moving it to 0. All other steps give the same results as before.
+
+### The 155 frame spread between overdub runs: harness timing, not placement
+
+In the M10c regressions, the take in `m10b-overdub` landed at 93928 in one run and 94083 in the other. Both numbers come out of the placement formula to the frame, from that run's own log:
+
+| Run | Render frame at host time | First live frame captured | Difference | Minus latencies (51.875 ms) | Position |
+|---|---|---|---|---|---|
+| M10b build | 99200 at 123109.171439 | 123109.113470 | -57.969 ms = -2782.5 frames | -2490 frames | 93927.5, stored 93928 |
+| M10c build | 99200 at 123036.667797 | 123036.613063 | -54.734 ms = -2627.2 frames | -2490 frames | 94082.8, stored 94083 |
+
+The latencies and the render anchor are the same in both runs. What differs is the moment the first live input frame was captured, relative to playback: 3.2 ms. The take begins with that frame, so its position has to differ by the same amount. That moment depends on where R fell in the input's 512 frame IO cycle, and on the phase between the MacBook microphone's cycle and the output device's cycle, which run on separate clocks and start independently each run. So the spread can be up to one input buffer (10.7 ms) and says nothing about accuracy. The harness compared positions of takes started at different moments, which is the wrong measure.
+
+Whether the placement itself is right can only be measured with sound that is in both the playback and the take: the loopback test (`scripts/selftest/m10b-loopback.txt`, see "Loopback test, for you" in M10b). It measures each click's offset in the take against the click in the timeline, so where R fell drops out. Its median decides the formula; the spread of its 20 offsets is the real placement jitter. It is still open.
