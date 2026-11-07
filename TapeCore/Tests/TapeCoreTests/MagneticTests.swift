@@ -36,14 +36,60 @@ final class MagneticTests: XCTestCase {
         p.regions = [region("a", 500, 1000), region("b", 4000, 2000), region("c", 2000, 700)]
         p.sortRegions()
         EditOperations.edit(&p) { EditOperations.setMagnetic(&$0, track: Track.firstID, on: true) }
-        XCTAssertEqual(positions(p), ["a@0+1000", "c@1000+700", "b@1700+2000"])
+        XCTAssertEqual(positions(p), ["a@500+1000", "c@1500+700", "b@2200+2000"])
         XCTAssertTrue(p.tracks[0].magnetic)
 
         // Off keeps positions as they are.
         EditOperations.edit(&p) { EditOperations.setMagnetic(&$0, track: Track.firstID, on: false) }
-        XCTAssertEqual(positions(p), ["a@0+1000", "c@1000+700", "b@1700+2000"])
+        XCTAssertEqual(positions(p), ["a@500+1000", "c@1500+700", "b@2200+2000"])
         EditOperations.edit(&p) { EditOperations.move(&$0, ids: [self.at($0, "b").id], by: 300) }
-        XCTAssertEqual(positions(p), ["a@0+1000", "c@1000+700", "b@2000+2000"], "free again")
+        XCTAssertEqual(positions(p), ["a@500+1000", "c@1500+700", "b@2500+2000"], "free again")
+    }
+
+    func testSequenceStartsAtTheFirstRegionAndMovesWithItInTime() {
+        // A take recorded at 9 s, made magnetic: it stays at 9 s, the gap after it closes.
+        var p = Project(sessionRate: 48000, channelCount: 2)
+        p.regions = [region("take", 432_000, 1000), region("b", 440_000, 2000)]
+        p.sortRegions()
+        EditOperations.edit(&p) { EditOperations.setMagnetic(&$0, track: Track.firstID, on: true) }
+        XCTAssertEqual(p.tracks[0].magneticStart, 432_000)
+        XCTAssertEqual(positions(p), ["take@432000+1000", "b@433000+2000"])
+
+        // The first region drags in time, the rest follows, also back towards 0, never before it.
+        EditOperations.edit(&p) { EditOperations.move(&$0, ids: [self.at($0, "take").id], by: 500) }
+        XCTAssertEqual(positions(p), ["take@432500+1000", "b@433500+2000"])
+        EditOperations.edit(&p) { q in
+            let take = self.at(q, "take").id
+            EditOperations.move(&q, ids: [take], by: -500_000)
+            EditOperations.insert(&q, ids: [take], track: Track.firstID)
+        }
+        XCTAssertEqual(positions(p), ["take@0+1000", "b@1000+2000"])
+        // Moving the whole sequence moves its start; the first region alone that far would pass b and reorder.
+        EditOperations.edit(&p) { EditOperations.move(&$0, ids: Set($0.regions.map(\.id)), by: 432_000) }
+        XCTAssertEqual(p.tracks[0].magneticStart, 432_000)
+        XCTAssertEqual(positions(p), ["take@432000+1000", "b@433000+2000"])
+
+        // Reordering, deleting the first and dropping in front keep the start.
+        EditOperations.edit(&p) { q in
+            let b = self.at(q, "b").id
+            EditOperations.move(&q, ids: [b], by: -2000)
+            EditOperations.insert(&q, ids: [b], track: Track.firstID)
+        }
+        XCTAssertEqual(positions(p), ["b@432000+2000", "take@434000+1000"])
+        EditOperations.edit(&p) { EditOperations.place(&$0, [self.region("n", 0, 400)], track: Track.firstID, at: 1000, overwrite: true) }
+        XCTAssertEqual(positions(p), ["n@432000+400", "b@432400+2000", "take@434400+1000"])
+        EditOperations.edit(&p) { EditOperations.delete(&$0, ids: [self.at($0, "n").id], ripple: true) }
+        XCTAssertEqual(positions(p), ["b@432000+2000", "take@434000+1000"])
+
+        // An empty magnetic track starts where its first region lands.
+        var e = Project(sessionRate: 48000, channelCount: 2)
+        EditOperations.edit(&e) { EditOperations.setMagnetic(&$0, track: Track.firstID, on: true) }
+        EditOperations.edit(&e) { EditOperations.place(&$0, [self.region("r", 0, 400)], track: Track.firstID, at: 96_000, overwrite: true) }
+        XCTAssertEqual(positions(e), ["r@96000+400"])
+
+        // The start is saved.
+        let back = try? JSONDecoder().decode(ProjectFile.self, from: JSONEncoder().encode(ProjectFile(document: p))).document
+        XCTAssertEqual(back?.tracks[0].magneticStart, 432_000)
     }
 
     func testReorderByDragProducesTheExpectedSequence() {
@@ -203,7 +249,7 @@ final class MagneticTests: XCTestCase {
         XCTAssertEqual(EditOperations.connectedRegions(p, onTrack: t2).count, 2)
         EditOperations.edit(&p) { EditOperations.setMagnetic(&$0, track: t2, on: true) }
         XCTAssertTrue(EditOperations.connectedRegions(p, onTrack: t2).isEmpty)
-        XCTAssertEqual(positions(p, track: t2), ["x@0+300", "y@300+200"])
+        XCTAssertEqual(positions(p, track: t2), ["x@1700+300", "y@2000+200"], "the sequence starts at x")
     }
 
     func testDropOntoAMagneticTrackInserts() {

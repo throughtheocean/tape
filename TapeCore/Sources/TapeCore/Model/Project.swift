@@ -183,11 +183,14 @@ public struct Track: Equatable, Hashable, Identifiable, Sendable {
     public var pan: Double
     public var mute: Bool
     public var solo: Bool
-    /// The regions are one sequence without gaps from 0; positions follow from order and lengths.
+    /// The regions are one sequence without gaps from `magneticStart`; positions follow from order and lengths.
     public var magnetic: Bool
+    /// Where a magnetic track's sequence starts: the first region's position when magnetic was switched on,
+    /// moved by dragging the first region in time.
+    public var magneticStart: Int64
 
     public init(id: UUID = UUID(), name: String, color: Int = 0, gainDB: Double = 0, pan: Double = 0,
-                mute: Bool = false, solo: Bool = false, magnetic: Bool = false) {
+                mute: Bool = false, solo: Bool = false, magnetic: Bool = false, magneticStart: Int64 = 0) {
         self.id = id
         self.name = name
         self.color = color
@@ -196,6 +199,7 @@ public struct Track: Equatable, Hashable, Identifiable, Sendable {
         self.mute = mute
         self.solo = solo
         self.magnetic = magnetic
+        self.magneticStart = magneticStart
     }
 }
 
@@ -284,6 +288,7 @@ extension Project: Codable {
         var solo: Bool
         /// Written only when on, so documents without magnetic tracks read as before.
         var magnetic: Bool?
+        var magneticStart: Int64?
         var regions: [Region]
     }
 
@@ -296,7 +301,8 @@ extension Project: Codable {
         master = try c.decodeIfPresent(Master.self, forKey: .master) ?? Master()
         if let files = try c.decodeIfPresent([TrackFile].self, forKey: .tracks) {
             tracks = files.map { Track(id: $0.id, name: $0.name, color: $0.color, gainDB: $0.gainDB, pan: $0.pan,
-                                       mute: $0.mute, solo: $0.solo, magnetic: $0.magnetic ?? false) }
+                                       mute: $0.mute, solo: $0.solo, magnetic: $0.magnetic ?? false,
+                                       magneticStart: $0.magneticStart ?? 0) }
             regions = files.flatMap { f in f.regions.map { r in
                 var r = r
                 r.trackId = f.id
@@ -317,7 +323,8 @@ extension Project: Codable {
         try c.encode(master, forKey: .master)
         let files = tracks.map { t in
             TrackFile(id: t.id, name: t.name, color: t.color, gainDB: max(t.gainDB, Track.silentDB), pan: t.pan, mute: t.mute,
-                      solo: t.solo, magnetic: t.magnetic ? true : nil, regions: regions.filter { $0.trackId == t.id })
+                      solo: t.solo, magnetic: t.magnetic ? true : nil,
+                      magneticStart: t.magnetic && t.magneticStart != 0 ? t.magneticStart : nil, regions: regions.filter { $0.trackId == t.id })
         }
         try c.encode(files, forKey: .tracks)
     }

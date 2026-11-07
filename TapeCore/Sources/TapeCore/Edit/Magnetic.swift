@@ -10,7 +10,9 @@ extension EditOperations {
     }
 
     /// Positions after an edit, `before` being the state the edit started from:
-    /// 1. Every magnetic track is one sequence from 0, in position order; its regions carry no anchor.
+    /// 1. Every magnetic track is one sequence from its `magneticStart`, in position order; its regions carry no anchor.
+    ///    When the region that was first is still first and the edit moved it, the sequence starts where it now is,
+    ///    so the first region drags in time and the rest follows. An empty track starts at its first region.
     /// 2. A connected region the edit did not move follows its anchor by as much as the anchor moved. One the edit
     ///    moved, connected or created keeps its place, and its offset is measured again.
     /// 3. An anchor that is gone, or is itself connected, disconnects; the region keeps its position. An anchor on a
@@ -28,6 +30,16 @@ extension EditOperations {
                 return a.id.uuidString < b.id.uuidString
             }
             var next: [UUID: Int64] = [:]
+            for t in project.tracks.indices where magnetic.contains(project.tracks[t].id) {
+                let id = project.tracks[t].id
+                guard let first = order.first(where: { project.regions[$0].trackId == id }).map({ project.regions[$0] })
+                else { continue }
+                let wasFirst = before.regions.filter { $0.trackId == id }.min { $0.position < $1.position }
+                if wasFirst == nil || (wasFirst?.id == first.id && wasFirst?.position != first.position) {
+                    project.tracks[t].magneticStart = max(0, first.position)
+                }
+                next[id] = project.tracks[t].magneticStart
+            }
             for i in order {
                 let track = project.regions[i].trackId
                 project.regions[i].position = next[track, default: 0]
@@ -56,10 +68,15 @@ extension EditOperations {
         project.sortRegions()
     }
 
-    /// Turns a track magnetic or back. On, its regions lose their anchors and `settle` closes the gaps;
+    /// Turns a track magnetic or back. On, the sequence starts at its first region, its regions lose their anchors
+    /// and `settle` closes the gaps;
     /// off, positions and the connections to its regions stay as they are.
     public static func setMagnetic(_ project: inout Project, track: UUID, on: Bool) {
-        updateTrack(&project, id: track) { $0.magnetic = on }
+        let start = project.regions.filter { $0.trackId == track }.map(\.position).min() ?? 0
+        updateTrack(&project, id: track) {
+            $0.magnetic = on
+            if on { $0.magneticStart = start }
+        }
         guard on else { return }
         for i in project.regions.indices where project.regions[i].trackId == track { project.regions[i].anchor = nil }
     }
@@ -70,7 +87,8 @@ extension EditOperations {
     }
 
     /// Puts `ids` (already on the magnetic `track`) into its sequence where their block starts: after every other
-    /// region whose middle lies before that frame. Lays the track out from 0. Returns the insertion frame.
+    /// region whose middle lies before that frame. Lays the track out from its start, or from the block's start when
+    /// the block comes first, so that `settle` can tell a time drag of the first region. Returns the insertion frame.
     @discardableResult
     public static func insert(_ project: inout Project, ids: Set<UUID>, track: UUID) -> Int64? {
         let onTrack = project.regions.filter { $0.trackId == track }
@@ -79,7 +97,7 @@ extension EditOperations {
         let others = onTrack.filter { !ids.contains($0.id) }.sorted { $0.position < $1.position }
         let k = others.filter { $0.position + $0.length / 2 < start }.count
         var positions: [UUID: Int64] = [:]
-        var position: Int64 = 0
+        var position = k == 0 ? max(0, start) : project.track(track)?.magneticStart ?? 0
         for r in Array(others[..<k]) + moved + Array(others[k...]) {
             positions[r.id] = position
             position += r.length

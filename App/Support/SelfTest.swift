@@ -689,7 +689,7 @@ final class SelfTest {
             let lane = e.lane(for: t.id).map { String(format: "%.0f+%.0f", $0.top, $0.height) } ?? "hidden"
             write(String(format: "  T%d %@ color %d gain %.2f pan %.2f mute %@ solo %@ regions %d lane %@",
                          i + 1, t.name, t.color, t.gainDB, t.pan, t.mute ? "true" : "false", t.solo ? "true" : "false",
-                         d.project.regions(onTrack: t.id).count, lane) + (t.magnetic ? " magnetic" : ""))
+                         d.project.regions(onTrack: t.id).count, lane) + (t.magnetic ? " magnetic from \(t.magneticStart)" : ""))
         }
     }
 

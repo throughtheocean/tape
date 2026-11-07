@@ -263,6 +263,10 @@ extension TimelineMetalView {
                     }
                 }
             }
+            if let track = insertion?.track,
+               let frame = editor.project.regions.filter({ $0.trackId == track && moving.contains($0.id) }).map(\.position).min() {
+                insertion = .init(track: track, frame: frame)
+            }
             editor.pointer.insertion = insertion
             let verb = copies == nil ? "" : "Copy "
             let target = moving.first.flatMap { id in editor.project.regions.first { $0.id == id } }.flatMap { editor.project.track($0.trackId) }

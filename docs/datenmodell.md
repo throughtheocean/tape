@@ -10,7 +10,7 @@ A `.tape` package holds `project.json` (version 2) and an `Audio` folder with th
 
 - `sessionRate`, `channelCount`: set by the first audio that enters an empty document (import, drop or recording).
 - `sources`: one `SourceRef` per file: id, name, location (inside the package or external with a bookmark), sample rate, channel count, frame count, pre-roll frames for recordings.
-- `tracks`: ordered top to bottom. Each has id, name, color, `gainDB`, `pan` (-1 to 1), `mute`, `solo`, `magnetic` (written only when on).
+- `tracks`: ordered top to bottom. Each has id, name, color, `gainDB`, `pan` (-1 to 1), `mute`, `solo`, `magnetic` and `magneticStart` (written only when on).
 - `regions`: id, name, `trackId`, `sourceId`, `sourceIn`/`sourceOut` (frames in the source), `position` (frame on the timeline), `gainDB`, `fadeIn`/`fadeOut` (length, shape, blend), `anchor` (only on connected regions, see below).
 - `master`: `gainDB`.
 
@@ -18,11 +18,11 @@ All positions and lengths are frames at the session rate.
 
 ## Magnetic tracks and connected regions
 
-A magnetic track is one sequence without gaps, starting at frame 0. What the edits change on it is order and lengths; `position` follows from them. The file still stores every position, so the renderer, export and an older Tape read a magnetic track like any other. The renderer does not know the flag: a magnetic track renders exactly like the same regions on a free track.
+A magnetic track is one sequence without gaps, starting at `magneticStart`. What the edits change on it is order, lengths and that start; `position` follows from them. The file still stores every position, so the renderer, export and an older Tape read a magnetic track like any other. The renderer does not know the flag: a magnetic track renders exactly like the same regions on a free track.
 
 Every edit goes through `EditOperations.edit`, which runs the change and then `settle`, against the state before the change:
 
-1. Each magnetic track is laid out from 0 in position order. On equal positions a region the edit added goes first, so a drop or a take at a region's start lands before it. Regions on magnetic tracks carry no anchor.
+1. Each magnetic track is laid out from its start in position order. Switching magnetic on sets the start to the first region's position, so a take recorded at bar 9 stays at bar 9. When the region that was first before an edit is still first and the edit moved it, the start moves with it: the first region drags (and nudges) in time and the rest follows. Reordering, deleting the first region or dropping in front of it keeps the start. An empty magnetic track starts where its first region lands. On equal positions a region the edit added goes first, so a drop or a take at a region's start lands before it. Regions on magnetic tracks carry no anchor.
 2. A connected region the edit did not touch moves by as much as its anchor moved: `position = anchor.position + offset`. A connected region the edit moved itself keeps the place it was moved to, and its offset is measured again. Gain, fades, track and length are never taken from the anchor.
 3. A connection whose anchor is gone (deleted) is dropped; the region keeps its absolute position. Connections do not chain: a region others are connected to cannot be connected itself.
 

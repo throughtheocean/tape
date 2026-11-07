@@ -1113,3 +1113,16 @@ I do not play audio here, so the 1 ms check is yours. `scripts/selftest/m10b-loo
 6. **Nudge (comma, period) on a magnetic track** only reorders, like a drag: a nudge that does not carry the region past a neighbour's middle changes nothing, since the position is derived. Connected regions nudge as before.
 7. **Connector lines are drawn in multitrack only.** In single view only one lane is visible, so there is nothing to connect to on screen.
 8. **Gap regions use a reserved source id.** An older Tape build opening such a document would show the gap as a region with a missing source (silent, as now). Documents without gaps are unchanged.
+
+### M10c fix: the sequence starts at the first region
+
+Deviation 3 is corrected. A magnetic sequence no longer starts at 0:
+
+- Switching magnetic on stores the first region's position as `track.magneticStart` and closes the gaps from there. A take recorded at bar 9 stays at bar 9.
+- The first region drags in time like any other region, and the rest follows; a nudge on it does the same. Dragged past the middle of the second region, it reorders instead, and the start stays.
+- Reordering, deleting the first region or dropping in front of it keeps the start. An empty magnetic track starts where its first region lands (a drop or a take).
+- Everything else stays derived from order, lengths and that start. `magneticStart` is written only for magnetic tracks with a start other than 0. Undo covers it like any track field.
+
+Test: `testSequenceStartsAtTheFirstRegionAndMovesWithItInTime` (a take at 9 s made magnetic stays at 9 s; the first region dragged 500 later and back to 0 takes the rest along; moving the whole sequence moves the start; reorder, a drop in front and deleting the first keep it; an empty track starts at its first region; the start survives saving). 126 TapeCore tests, 5 skipped, 0 failures.
+
+By hand, `m10c-magnetic.txt` with a new step: the first region on the magnetic track dragged 1 s later moved the sequence to start at 48000 (a 48000, b 240000, a 384000). Making track 2 magnetic now leaves its region at 58000, where it was, instead of moving it to 0. All other steps give the same results as before.

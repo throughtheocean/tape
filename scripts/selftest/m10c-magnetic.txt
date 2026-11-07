@@ -13,6 +13,11 @@ waitLoaded
 log start: track 1 a 0, b 240000, a 480000 with gaps; x (b) on track 2 at 300000
 header 1 click magnet
 log magnetic on: gaps closed to a 0, b 192000, a 336000; x stays; undo 'Close Gaps'
+mouse down f50000 wave:1
+mouse drag f98000 wave:1
+mouse up f98000 wave:1
+log first region dragged 1 s later: a 48000, b 240000, a 384000, magnetic from 48000
+key cmd+z
 mouse down f350000 wave:2 opt+cmd
 mouse drag f300000 wave:1 opt+cmd
 log Option Command drag of x over b: x at 250000, b outlined
@@ -57,7 +62,7 @@ sheet escape
 log cancelled: nothing changed
 header 2 click magnet
 sheet return
-log confirmed: track 2 magnetic, x disconnected at 0
+log confirmed: track 2 magnetic, x disconnected, stays at 58000 where the sequence now starts
 key cmd+z
 key cmd+z
 log undo twice: track 2 free, x connected at 58000
