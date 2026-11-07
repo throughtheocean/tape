@@ -1183,3 +1183,18 @@ Not done yet. `security find-identity -v -p codesigning` lists two Apple Develop
 - Play with loop on and the playhead outside the loop starts at the loop start, as Logic does with its cycle. This applies to range loops too; before, playback ran from the playhead into the loop.
 - The loop symbol is drawn in the accent colour while loop is on; the plain button state was hard to see.
 - `scripts/selftest/loop-selection.txt` (track muted, nothing heard): region at 5 s to 8 s selected, loop on, play from 0: playback started at the region and was at 290713 after 1 s and at 293834 after 4 s, so it wrapped inside the region. The first region selected with the playhead at 300000: playback started at 0.
+
+## Mark audio in the waveform, cut it out (Maik's request)
+
+- A drag inside a region's waveform now marks a range over the audio (as Shift drag did, with the same zero crossing snap when Snap is on; Command drag without). A click still selects the region and places the playhead.
+- Regions move only by their name strip at the top: drag it to move, Option drag to copy, Option Command drag to connect. The pointer shows an open hand over the strip and a text cursor over the waveform. Trim edges and fade handles work as before.
+- **Delete with a range marked cuts the marked audio out** and closes the gap ("Cut Out Range"). **Forward Delete** cuts it out and leaves the time empty ("Delete Range Leaving Gap"; on a magnetic track a gap region keeps the sequence). Without a range, both delete whole regions as before. The Edit menu names the command that will run.
+- A **Cut Out** button in the transport, next to Loop, does the same as Delete; it is enabled while a range lies over audio.
+- Which tracks: in the single view the shown track; in the multitrack view the tracks of the selected regions (the region you dragged in), else the selected track. Other tracks keep their timing. The range is still drawn across all lanes.
+- After a cut the range is cleared and the playhead sits at the cut. Undo brings the audio back; the range itself is view state and stays cleared.
+
+Tests: `RemoveRangeTests` (ripple on the chosen track only, leaving the time empty, a cut inside one region leaves two parts with the right source offsets, a magnetic track keeps its sequence with or without a gap region, nothing under the range changes nothing). 131 TapeCore tests, 5 skipped, 0 failures.
+
+By hand, `scripts/selftest/cut-out.txt`: a drag in the waveform from 1 s to 2 s marked 48000..<96000 and left the region in place; Delete gave two regions, 0+48000 and 48000+96000 reading the source from 96000; Forward Delete left them at 0 and 96000; a drag on the name strip moved the region by 1 s; without a range Delete removed the region. `m3-edit`, `m6-multitrack`, `m10a-only-drop-overlap` and `m10c-magnetic` now press the name strip where they move regions, and give the same states as before the change (compared against a build of the previous commit).
+
+Open: a cut is a hard edit with no fade at the join. With Snap on, the range edges sit on zero crossings, which usually avoids a click; a short crossfade at the join belongs with the crossfade command planned for M12.

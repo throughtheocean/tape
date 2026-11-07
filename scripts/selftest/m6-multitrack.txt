@@ -23,7 +23,7 @@ log four tracks
 snapshot /tmp/tape-m6-four.png
 
 # Drag the track 2 region down two lanes; one undo step brings it back.
-mouse down f250000 wave:2
+mouse down f250000 strip:2
 mouse drag f250000 wave:3
 mouse drag f250000 wave:4
 mouse up f250000 wave:4

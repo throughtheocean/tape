@@ -163,8 +163,10 @@ final class TimelineMetalView: MTKView {
         case none
         case minimapScroll(grabOffset: Double)
         case minimapEdge(left: Bool, fixedFrame: Double)
-        /// Mouse down on a region; becomes a move once the pointer travels.
+        /// Mouse down on a region's name strip; becomes a move once the pointer travels.
         case pressRegion(id: UUID, downX: Double, downY: Double, downFrame: Int64)
+        /// Mouse down in a region's waveform; becomes range marking once the pointer travels.
+        case pressWave(id: UUID, downX: Double, downFrame: Int64)
         /// `copies` maps each region to its copy's id for an Option drag; nil moves the regions themselves.
         case move(ids: Set<UUID>, downFrame: Int64, downLane: Int, copies: [UUID: UUID]?)
         /// Option Command drag: moves `ids` in time on their own track and connects them to the region it is

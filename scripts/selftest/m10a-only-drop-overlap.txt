@@ -40,14 +40,14 @@ log below the last lane: a new track 3 at 96000
 key cmd+z
 
 # Option drag copies a region, here from track 1 to track 2; the original stays.
-mouse down f24000 wave:1
+mouse down f24000 strip:1
 mouse drag f60000 wave:2 opt
 mouse drag f224000 wave:2 opt
 mouse up f224000 wave:2 opt
 log option drag: a copy of A on track 2 at 200000, A still on track 1, undo 'Copy'
 key cmd+z
 # A plain move onto another region trims the one underneath.
-mouse down f24000 wave:2
+mouse down f24000 strip:2
 mouse drag f60000 wave:1
 mouse drag f72000 wave:1
 mouse up f72000 wave:1

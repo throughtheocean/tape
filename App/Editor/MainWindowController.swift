@@ -607,9 +607,13 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             item.state = editor.expandSelected ? .on : .off
             return editor.multitrack
         case #selector(deleteRegions(_:)):
-            return !editor.selectedIDs.isEmpty
+            item.title = editor.canRemoveRange ? "Cut Out Range" : "Delete"
+            return editor.canRemoveRange || !editor.selectedIDs.isEmpty
                 || (editor.multitrack && editor.headerFocused && editor.project.tracks.count > 1 && !RecordController.shared.isRecording)
-        case #selector(deleteRegionsLeavingGap(_:)), #selector(duplicateRegions(_:)),
+        case #selector(deleteRegionsLeavingGap(_:)):
+            item.title = editor.canRemoveRange ? "Delete Range Leaving Gap" : "Delete Leaving Gap"
+            return editor.canRemoveRange || !editor.selectedIDs.isEmpty
+        case #selector(duplicateRegions(_:)),
              #selector(applyDefaultFades(_:)), #selector(showFadeDialog(_:)), #selector(nudgeLeft(_:)), #selector(nudgeRight(_:)):
             return !editor.selectedIDs.isEmpty
         case #selector(bladeRegions(_:)), #selector(selectAll(_:)):

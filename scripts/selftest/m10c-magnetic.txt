@@ -13,12 +13,12 @@ waitLoaded
 log start: track 1 a 0, b 240000, a 480000 with gaps; x (b) on track 2 at 300000
 header 1 click magnet
 log magnetic on: gaps closed to a 0, b 192000, a 336000; x stays; undo 'Close Gaps'
-mouse down f50000 wave:1
+mouse down f50000 strip:1
 mouse drag f98000 wave:1
 mouse up f98000 wave:1
 log first region dragged 1 s later: a 48000, b 240000, a 384000, magnetic from 48000
 key cmd+z
-mouse down f350000 wave:2 opt+cmd
+mouse down f350000 strip:2 opt+cmd
 mouse drag f300000 wave:1 opt+cmd
 log Option Command drag of x over b: x at 250000, b outlined
 snapshot /tmp/tape-m10c-connect-drag.png
@@ -29,13 +29,13 @@ mouse down f191500 wave:1
 mouse drag f144000 wave:1
 mouse up f144000 wave:1
 log trim a's end to 144000: b 144000, a 288000, x 202000 (all 48000 left)
-mouse down f200000 wave:1
+mouse down f200000 strip:1
 mouse drag f20000 wave:1
 log dragging b to the front: insertion at 0, the others slid apart
 snapshot /tmp/tape-m10c-reorder-drag.png
 mouse up f20000 wave:1
 log reordered: b 0, a 144000, a 288000; x follows b to 58000
-mouse down f200000 wave:1
+mouse down f200000 strip:1
 mouse drag f500000 wave:1
 log dragging the first a past the middle of the second: b 0, a 144000, dragged a 336000, insertion line at 336000
 snapshot /tmp/tape-m10c-reorder-end.png

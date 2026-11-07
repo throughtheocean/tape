@@ -74,6 +74,37 @@ public enum EditOperations {
         project.sortRegions()
     }
 
+    // MARK: Remove range
+
+    /// Cuts `range` out of the regions on `tracks`: they are split at its edges and the parts inside go.
+    /// With `ripple` everything on those tracks after the range moves left by its length; without, the time stays
+    /// empty, and on a magnetic track a gap region of the range's length keeps the sequence. Other tracks stay.
+    public static func removeRange(_ project: inout Project, _ range: SampleRange, tracks: Set<UUID>, ripple: Bool) {
+        guard !range.isEmpty else { return }
+        let hit = Set(project.regions.filter {
+            tracks.contains($0.trackId) && $0.position < range.end && $0.end > range.start
+        }.map(\.id))
+        guard !hit.isEmpty else { return }
+        let created = blade(&project, at: [range.start, range.end], only: hit)
+        let candidates = hit.union(created)
+        let inside = Set(project.regions.filter {
+            candidates.contains($0.id) && $0.position >= range.start && $0.end <= range.end
+        }.map(\.id))
+        let emptied = Set(project.regions.filter { inside.contains($0.id) }.map(\.trackId))
+        project.regions.removeAll { inside.contains($0.id) }
+        if ripple {
+            for i in project.regions.indices where tracks.contains(project.regions[i].trackId)
+                && project.regions[i].position >= range.end {
+                project.regions[i].position -= range.length
+            }
+        } else {
+            for track in emptied where project.track(track)?.magnetic == true {
+                project.regions.append(.gap(track: track, position: range.start, length: range.length))
+            }
+        }
+        project.sortRegions()
+    }
+
     // MARK: Duplicate
 
     /// Copies `ids` and places the copies right after the selection's span, on their own tracks; later regions

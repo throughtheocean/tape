@@ -33,7 +33,7 @@ mouse up f12000 wave-30 opt
 log option drag midpoint
 
 # Move the second region right by 24000.
-mouse down f200000 wave
+mouse down f200000 strip
 mouse drag f212000 wave
 mouse drag f224000 wave
 mouse up f224000 wave

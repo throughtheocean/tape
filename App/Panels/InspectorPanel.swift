@@ -32,8 +32,10 @@ struct InspectorPanel: View {
 
     @ViewBuilder private var regionShortcuts: some View {
         shortcut("Command B", "Blade at playhead or range edges")
-        shortcut("Delete", "Delete, ripple left")
-        shortcut("Fwd Delete", "Delete, leave gap")
+        shortcut("Drag name", "Move region")
+        shortcut("Drag wave", "Mark audio")
+        shortcut("Delete", "Cut out marked audio, else delete; ripple left")
+        shortcut("Fwd Delete", "The same, leave gap")
         shortcut("Command D", "Duplicate after selection")
         shortcut("F", "Default fades")
         shortcut("Opt Cmd F", "Fade dialog")

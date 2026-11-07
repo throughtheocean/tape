@@ -22,6 +22,11 @@ struct TransportPanel: View {
             .toggleStyle(.button)
             .help("Loop the range, else the selected regions, else everything (Command L)")
 
+            Button("Cut Out") { editor.removeRange(ripple: true) }
+                .font(.system(size: 11))
+                .disabled(!editor.canRemoveRange)
+                .help("Cut the marked audio out and close the gap (Delete). Drag inside a waveform to mark.")
+
             TimecodeReadout(clock: editor.clock, editor: editor)
 
             if editor.isPlaying, editor.speed != 1 {

@@ -34,9 +34,40 @@ extension EditorController {
         document.apply("Blade") { EditOperations.blade(&$0, at: [frame], only: [id]) }
     }
 
+    /// Tracks a range cut applies to: the shown track in the single view; in the multitrack view the tracks of the
+    /// selected regions, else the selected track.
+    var rangeTracks: Set<UUID> {
+        let tracks = Set(selectedRegions.map(\.trackId))
+        return multitrack && !tracks.isEmpty ? tracks : [selectedTrackID]
+    }
+
+    /// A range is marked and audio on the range tracks lies under it; Delete then cuts the range, not regions.
+    var canRemoveRange: Bool {
+        guard let range, !range.isEmpty else { return false }
+        let tracks = rangeTracks
+        return project.regions.contains { tracks.contains($0.trackId) && $0.position < range.end && $0.end > range.start }
+    }
+
+    /// Cuts the marked audio out. With `ripple` what follows closes up, without the time stays empty.
+    func removeRange(ripple: Bool) {
+        guard canRemoveRange, let range else { return }
+        let tracks = rangeTracks
+        document.apply(ripple ? "Cut Out Range" : "Delete Range Leaving Gap") {
+            EditOperations.removeRange(&$0, range, tracks: tracks, ripple: ripple)
+        }
+        selection = []
+        clearRange()
+        locate(range.start)
+    }
+
     /// Delete ripples. Forward Delete leaves a gap: on a magnetic track a gap region of the same length takes
-    /// the region's place, elsewhere the region goes and the time stays empty.
+    /// the region's place, elsewhere the region goes and the time stays empty. With a range marked over audio,
+    /// both act on the range instead of whole regions.
     func deleteSelection(ripple: Bool) {
+        if canRemoveRange {
+            removeRange(ripple: ripple)
+            return
+        }
         let ids = selectedIDs
         guard !ids.isEmpty else { return }
         if ripple {

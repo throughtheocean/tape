@@ -1,0 +1,31 @@
+# Drag in the waveform marks audio, Delete cuts it out; regions move by their name strip. Nothing is played.
+wait 1
+import /tmp/tape-m6-a.wav
+waitLoaded
+view 0 500
+mouse down f48000 wave
+mouse drag f70000 wave
+mouse drag f96000 wave
+mouse up f96000 wave
+log drag in the waveform: range 48000..<96000, region not moved
+snapshot /tmp/tape-cut-range.png
+key delete
+log Delete: cut out, a 0+48000 and a 48000+96000 (source from 96000), undo 'Cut Out Range', range gone
+key cmd+z
+log undo: one region 0+192000 (the range is view state and stays cleared)
+mouse down f48000 wave
+mouse drag f96000 wave
+mouse up f96000 wave
+key fwddelete
+log Forward Delete: a 0+48000 and a 96000+96000, undo 'Delete Range Leaving Gap'
+key cmd+z
+key opt+x
+mouse down f100000 strip
+mouse drag f124000 strip
+mouse drag f148000 strip
+mouse up f148000 strip
+log drag on the name strip moves the region to 48000, undo 'Move', no range
+mouse click f60000 wave
+key delete
+log no range: Delete removes the selected region as before
+quit

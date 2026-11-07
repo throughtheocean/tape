@@ -34,7 +34,8 @@ struct FadeHandles {
     }
 }
 
-/// Pointer input on the track: selection, move, trim, fades, blade tool, Shift marking, rubber band.
+/// Pointer input on the track: selection, move (by the name strip), range marking (in the waveform or with Shift),
+/// trim, fades, blade tool, rubber band.
 extension TimelineMetalView {
     enum Hit {
         case handle(Region, EditOperations.FadeEnd)
@@ -187,10 +188,20 @@ extension TimelineMetalView {
                 return
             }
             if !editor.selection.contains(r.id) { editor.selection = [r.id] }
-            drag = .pressRegion(id: r.id, downX: Double(p.x), downY: Double(p.y), downFrame: frame)
+            if onNameStrip(p, of: r) {
+                drag = .pressRegion(id: r.id, downX: Double(p.x), downY: Double(p.y), downFrame: frame)
+            } else {
+                drag = .pressWave(id: r.id, downX: Double(p.x), downFrame: frame)
+            }
         default:
             drag = .pressEmpty(downX: Double(p.x), downY: Double(p.y), additive: flags.contains(.command))
         }
+    }
+
+    /// Regions move by their name strip; the waveform below it marks ranges.
+    private func onNameStrip(_ p: CGPoint, of r: Region) -> Bool {
+        guard let lane = editor.lanes().first(where: { $0.track.id == r.trackId }) else { return true }
+        return Double(p.y) < lane.waveTop
     }
 
     /// Shift applies a fade drag to every selected region.
@@ -277,6 +288,11 @@ extension TimelineMetalView {
             } else {
                 hint(verb + editor.durationText(applied), at: p)
             }
+        case let .pressWave(_, downX, downFrame):
+            guard abs(Double(p.x) - downX) >= 3 else { return }
+            let anchor = flags.contains(.command) ? downFrame : editor.snapped(downFrame)
+            drag = .mark(anchor: anchor)
+            mouseDragged(with: event)
         case let .connect(ids, downFrame):
             let delta = frame - downFrame
             doc.updateGesture { EditOperations.move(&$0, ids: ids, by: delta) }
@@ -370,7 +386,7 @@ extension TimelineMetalView {
         let p = convert(event.locationInWindow, from: nil)
         let doc = editor.document
         switch drag {
-        case let .pressRegion(id, _, _, _):
+        case let .pressRegion(id, _, _, _), let .pressWave(id, _, _):
             editor.selection = [id]
             editor.locate(frameAt(p))
         case let .move(_, _, _, copies): doc.endGesture(copies == nil ? "Move" : "Copy")
@@ -453,6 +469,8 @@ extension TimelineMetalView {
             overlay.hoverRegion = r.id
             overlay.hoverEdge = (r.id, start)
             NSCursor.resizeLeftRight.set()
+        case let .body(r):
+            (onNameStrip(p, of: r) ? NSCursor.openHand : NSCursor.iBeam).set()
         default:
             NSCursor.arrow.set()
         }
