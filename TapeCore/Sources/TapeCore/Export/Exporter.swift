@@ -157,6 +157,37 @@ public enum Exporter {
         return clean.trimmingCharacters(in: .whitespaces).isEmpty ? "Untitled" : clean
     }
 
+    /// A file name pattern as plain text and known `{token}` pieces, for the token field. Unknown braces stay text.
+    public enum NamePiece: Equatable, Sendable {
+        case text(String)
+        case token(String)
+    }
+
+    public static func pieces(of pattern: String) -> [NamePiece] {
+        var out: [NamePiece] = []
+        func addText(_ s: Substring) {
+            guard !s.isEmpty else { return }
+            if case let .text(t)? = out.last { out[out.count - 1] = .text(t + s) } else { out.append(.text(String(s))) }
+        }
+        var rest = Substring(pattern)
+        while let open = rest.firstIndex(of: "{"), let close = rest[open...].firstIndex(of: "}") {
+            addText(rest[..<open])
+            let token = rest[rest.index(after: open)..<close]
+            if expand(token, name: "", index: 0, region: "", track: "", date: Date()) != nil {
+                out.append(.token(String(rest[open...close])))
+            } else {
+                addText(rest[open...close])
+            }
+            rest = rest[rest.index(after: close)...]
+        }
+        addText(rest)
+        return out
+    }
+
+    public static func pattern(from pieces: [NamePiece]) -> String {
+        pieces.map { if case let .text(s) = $0 { s } else if case let .token(s) = $0 { s } else { "" } }.joined()
+    }
+
     private static func expand(_ token: Substring, name: String, index: Int, region: String, track: String, date: Date) -> String? {
         let parts = token.split(separator: ":", maxSplits: 1)
         switch parts.first.map(String.init) {

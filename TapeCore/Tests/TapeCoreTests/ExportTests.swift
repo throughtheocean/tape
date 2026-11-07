@@ -287,3 +287,19 @@ final class ExportTests: XCTestCase {
         XCTAssertNotNil(ExportPreset.preset(for: "octatrack")!.violation(fileSeconds: Array(repeating: 1, count: 65)))
     }
 }
+
+final class NamePieceTests: XCTestCase {
+    func testPatternSplitsIntoTextAndKnownTokens() {
+        let p = "{name} - Mix {index:02}_{date}{nope}x"
+        XCTAssertEqual(Exporter.pieces(of: p), [
+            .token("{name}"), .text(" - Mix "), .token("{index:02}"), .text("_"), .token("{date}"), .text("{nope}x"),
+        ])
+        XCTAssertEqual(Exporter.pattern(from: Exporter.pieces(of: p)), p)
+    }
+
+    func testPlainTextAndUnclosedBraceStayText() {
+        XCTAssertEqual(Exporter.pieces(of: "Final take, v2"), [.text("Final take, v2")])
+        XCTAssertEqual(Exporter.pieces(of: "a{region"), [.text("a{region")])
+        XCTAssertEqual(Exporter.pieces(of: ""), [])
+    }
+}

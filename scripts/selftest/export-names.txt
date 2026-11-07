@@ -1,0 +1,23 @@
+# Export file names as tokens and free text: typed text stays text (commas, spaces), a dropped token is a chip,
+# a typed {token} becomes a chip when editing ends. Nothing is played or written.
+wait 1
+import /tmp/tape-m6-a.wav
+waitLoaded
+view 0 500
+mouse click f96000 wave
+key cmd+b
+key cmd+a
+key shift+cmd+e
+export preset none
+namefield state
+export pattern
+namefield type Mix, take_
+namefield drop {region}
+namefield type _v2 {date}
+log typed text and a dropped Region token; {date} typed, not yet a chip
+namefield end
+namefield drop {index:02}
+namefield end
+export state
+sheet escape
+quit

@@ -1233,3 +1233,17 @@ By hand, `scripts/selftest/cut-split.txt`: a click at 60000 then Cut gave 0+6000
 - **Deselect All** (Edit menu, **Esc**): clears the region selection and the marked range. Before, only a click on empty timeline cleared the selection, and with one long region there is hardly any empty space. Esc stays with text fields (renaming a track, Inspector fields) and dialogs: the menu item is disabled while one of them has the keyboard, so Esc cancels there as before. Listed in the Inspector shortcuts and the help page.
 
 By hand, `scripts/selftest/deselect.txt`: region selected and range 96000..<144000, Esc: nothing selected, no range; with nothing selected the item is disabled and Esc changes nothing. The loop icon on the blue "on" button is seen in the active window only (the harness snapshot draws the window inactive, where the button is gray), so the final look is for you to confirm.
+
+## Export names as tokens and text (Maik's request)
+
+- The File names field (Each Region and Stems) is now a token field, as in Logic's bounce naming. Tokens show as chips (Project, Region, Track, Number 01, Date); free text typed around them stays plain text, commas and spaces included.
+- Under the field is a row of the tokens the scope can use: drag one into the name at any place, or click it to add it at the end. A typed `{region}` (the old syntax) turns into a chip when editing ends; copy and paste between fields carries the tokens.
+- The stored pattern is the same text as before (`Mix_{region}_{index:02}`), so saved settings, presets and the exporter are unchanged. `Exporter.pieces(of:)` splits a pattern into text and known tokens for the field; unknown braces stay text.
+- The summary line under the field shows the names the export will write, as before.
+- Single-file exports (mix, range, selection) still take their name in the save panel.
+
+Tests: `NamePieceTests` (text and tokens split and join back unchanged, plain text, unclosed brace). 137 TapeCore tests, 5 skipped, 0 failures.
+
+By hand, `scripts/selftest/export-names.txt` with two regions: the default pattern shows as [Project]-[Number 01]; typing "Mix, take_", dropping Region (through a pasteboard, as a drop does), typing "_v2 {date}" and ending the edit gave "Mix, take_[Region]_v2 [Date]", then a dropped Number 01; the summary read "Mix, take_tape-m6-a_v2 26110701.wav, ..._02.wav". Screenshot checked. A real mouse drag from the chip row could not be driven by the harness; it uses the same pasteboard path, but please try it once. `m6-multitrack` (stems export) runs clean.
+
+Note: an early experiment for this put `{region}` on the general clipboard; later tests use a private pasteboard.

@@ -65,18 +65,12 @@ struct ExportSheet: View {
                 .disabled(session.onlyRegion != nil || session.isExporting)
             }
             if session.scope == .eachRegion {
-                row("File names") {
-                    TextField("", text: $session.pattern)
-                        .disabled(session.isPatternLocked || session.isExporting)
-                        .help("Tokens: {name} document, {region} region name, {track} track name, {index} or {index:02} number, {date} as YYMMDD")
-                }
+                nameRow($session.pattern, tokens: ["{name}", "{region}", "{track}", "{index:02}", "{date}"],
+                        help: "Type your own text and add tokens: Project, Region and Track names, Number, Date as YYMMDD")
                 startRow
             } else if session.scope == .stems {
-                row("File names") {
-                    TextField("", text: $session.stemPattern)
-                        .disabled(session.isPatternLocked || session.isExporting)
-                        .help("Tokens: {name} document, {track} track name, {index} or {index:02} track position, {date} as YYMMDD")
-                }
+                nameRow($session.stemPattern, tokens: ["{name}", "{track}", "{index:02}", "{date}"],
+                        help: "Type your own text and add tokens: Project and Track names, Number (track position), Date as YYMMDD")
             }
             Text(session.summary)
                 .font(.system(size: 11))
@@ -108,6 +102,19 @@ struct ExportSheet: View {
         .frame(width: 460)
     }
 
+    /// The name pattern as a token field with the palette of tokens under it.
+    private func nameRow(_ pattern: Binding<String>, tokens: [String], help: String) -> some View {
+        row("File names") {
+            VStack(alignment: .leading, spacing: 6) {
+                NamePatternField(pattern: pattern)
+                    .frame(height: 22)
+                    .help(help)
+                NameTokenPalette(tokens: tokens, pattern: pattern)
+            }
+            .disabled(session.isPatternLocked || session.isExporting)
+        }
+    }
+
     /// First number for `{index}`; the files count up from it in timeline order.
     private var startRow: some View {
         row("Start at") {
@@ -118,7 +125,7 @@ struct ExportSheet: View {
                 Stepper("", value: $session.startIndex, in: 0...9999)
                     .labelsHidden()
                 if !session.pattern.contains("{index") {
-                    Text("Add {index:02} to the names to number them.")
+                    Text("Add the Number token to the names to number them.")
                         .font(.system(size: 11))
                         .foregroundStyle(Color.tapeSecondary)
                 } else {

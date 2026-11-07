@@ -150,6 +150,8 @@ final class SelfTest {
             setting(args)
         case "help":
             help(args.first ?? "state")
+        case "namefield":
+            nameField(args, controller: c)
         case "sheet":
             sheet(args.first ?? "return", controller: c)
         case "preview":
@@ -765,6 +767,41 @@ final class SelfTest {
         let clicks = args.count > 1 && args[1] == "double" ? 2 : 1
         view.mouseDown(with: event(.leftMouseDown, clicks: clicks))
         view.mouseUp(with: event(.leftMouseUp, clicks: clicks))
+    }
+
+    /// `namefield state|end|type <text>|drop <text>`: the export sheet's name token field. `drop` puts the text on a
+    /// private pasteboard and reads it in at the end, as a drop or paste does.
+    private func nameField(_ args: [String], controller c: MainWindowController) {
+        func find(_ v: NSView?) -> NSTokenField? {
+            guard let v else { return nil }
+            if let f = v as? NSTokenField { return f }
+            for s in v.subviews { if let f = find(s) { return f } }
+            return nil
+        }
+        guard let sheet = c.window?.attachedSheet, let field = find(sheet.contentView) else {
+            write("namefield: no export sheet with a name field")
+            return
+        }
+        let text = args.dropFirst().joined(separator: " ")
+        func editor() -> NSTextView? {
+            if field.currentEditor() == nil { sheet.makeFirstResponder(field) }
+            let e = field.currentEditor() as? NSTextView
+            e?.setSelectedRange(NSRange(location: (e?.string as NSString?)?.length ?? 0, length: 0))
+            return e
+        }
+        switch args.first {
+        case "type": editor()?.insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0))
+        case "drop":
+            let pb = NSPasteboard(name: NSPasteboard.Name("TapeSelfTest"))
+            pb.clearContents()
+            pb.setString(text, forType: .string)
+            _ = editor()?.readSelection(from: pb, type: .string)
+        case "end": sheet.makeFirstResponder(nil)
+        default: break
+        }
+        let objects = (field.objectValue as? [Any]) ?? []
+        let shown = objects.map { NamePatternField.isToken($0) ? "[\(NamePatternField.label("\($0)"))]" : "\($0)" }.joined()
+        write("namefield: shows '\(shown)' pattern '\(c.exportSession?.pattern ?? "")' summary '\(c.exportSession?.summary ?? "")'")
     }
 
     /// `help open|close|state`: the help window and the page it shows.
