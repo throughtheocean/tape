@@ -127,6 +127,12 @@ extension EditorController {
         headerFocused = false
     }
 
+    /// Esc: no selected regions, no marked range.
+    func deselectAll() {
+        selection = []
+        clearRange()
+    }
+
     func setGain(_ dB: Double, ids: Set<UUID>) {
         document.apply("Gain") { EditOperations.setGain(&$0, ids: ids, dB: dB) }
     }

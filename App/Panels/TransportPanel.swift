@@ -17,7 +17,7 @@ struct TransportPanel: View {
 
             Toggle(isOn: Binding(get: { editor.loopEnabled }, set: { _ in editor.toggleLoop() })) {
                 Image(systemName: "repeat")
-                    .foregroundStyle(editor.loopEnabled ? Color(nsColor: Theme.accent) : Color.primary)
+                    .foregroundStyle(editor.loopEnabled ? Color.white : Color.primary)
             }
             .toggleStyle(.button)
             .help("Loop the range, else the selected regions, else everything (Command L)")

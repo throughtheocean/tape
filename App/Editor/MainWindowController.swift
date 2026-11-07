@@ -355,6 +355,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     // MARK: Edit actions
 
     override func selectAll(_ sender: Any?) { editor.selectAll() }
+    @objc func deselectAll(_ sender: Any?) { editor.deselectAll() }
     @objc func bladeRegions(_ sender: Any?) { editor.blade() }
     @objc func deleteRegions(_ sender: Any?) {
         if editor.multitrack, editor.headerFocused, editor.selectedIDs.isEmpty {
@@ -621,6 +622,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
         case #selector(duplicateRegions(_:)),
              #selector(applyDefaultFades(_:)), #selector(showFadeDialog(_:)), #selector(nudgeLeft(_:)), #selector(nudgeRight(_:)):
             return !editor.selectedIDs.isEmpty
+        case #selector(deselectAll(_:)):
+            return window?.attachedSheet == nil && !(window?.firstResponder is NSText)
+                && (!editor.selectedIDs.isEmpty || editor.range != nil)
         case #selector(bladeRegions(_:)), #selector(selectAll(_:)):
             return !tapeDocument.project.regions.isEmpty
         case #selector(showExport(_:)), #selector(exportRegion(_:)), #selector(showExportEachRegion(_:)):

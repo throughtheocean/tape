@@ -1226,3 +1226,10 @@ Screenshots checked: the help window renders in dark mode, and the Inspector sho
 
 By hand, `scripts/selftest/cut-split.txt`: a click at 60000 then Cut gave 0+60000 and 60000+132000 (source from 60000); a range 96000..<144000 then Cut gave four parts at 0, 60000, 96000 and 144000, the length still 192000; two undos gave back one region. Screenshot checked: Cut sits between Loop and Cut Out.
 - Renamed after Maik's look: the button is now **Split** (it splits, Cut Out removes). Self-test script renamed to `scripts/selftest/split.txt`; it gives the same states as before.
+
+## Loop icon, Deselect All (Maik's request)
+
+- The loop button's symbol was drawn in the accent colour on the accent-filled "on" button, so it disappeared. It is now white while loop is on, the normal text colour while off.
+- **Deselect All** (Edit menu, **Esc**): clears the region selection and the marked range. Before, only a click on empty timeline cleared the selection, and with one long region there is hardly any empty space. Esc stays with text fields (renaming a track, Inspector fields) and dialogs: the menu item is disabled while one of them has the keyboard, so Esc cancels there as before. Listed in the Inspector shortcuts and the help page.
+
+By hand, `scripts/selftest/deselect.txt`: region selected and range 96000..<144000, Esc: nothing selected, no range; with nothing selected the item is disabled and Esc changes nothing. The loop icon on the blue "on" button is seen in the active window only (the harness snapshot draws the window inactive, where the button is gray), so the final look is for you to confirm.

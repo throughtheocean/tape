@@ -55,6 +55,7 @@ struct InspectorPanel: View {
         shortcut("Option X", "Clear range")
         shortcut("Command L", "Loop playback")
         shortcut("Command A", "Select all regions")
+        shortcut("Esc", "Deselect regions and range")
         shortcut("B  A", "Blade tool, select tool")
         shortcut("Shift Z", "Fit all")
         shortcut("Option scroll", "Zoom horizontally")

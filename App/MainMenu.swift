@@ -39,6 +39,7 @@ enum MainMenu {
         item(edit, "Copy", #selector(NSText.copy(_:)), "c")
         item(edit, "Paste", #selector(NSText.paste(_:)), "v")
         item(edit, "Select All", #selector(NSText.selectAll(_:)), "a")
+        item(edit, "Deselect All", #selector(MainWindowController.deselectAll(_:)), "\u{1b}", [])
         edit.addItem(.separator())
         item(edit, "Blade", #selector(MainWindowController.bladeRegions(_:)), "b")
         item(edit, "Delete", #selector(MainWindowController.deleteRegions(_:)), "\u{8}", [])

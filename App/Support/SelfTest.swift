@@ -97,10 +97,11 @@ final class SelfTest {
         case "key":
             key(args.joined(separator: " "), controller: c)
         case "keyevent":
-            // keyevent <up|down>: a real arrow key event through the main menu's key equivalent matching.
+            // keyevent <up|down|esc>: a real key event through the main menu's key equivalent matching.
             let char = Self.named[args.first ?? ""] ?? ""
-            let code: UInt16 = args.first == "up" ? 126 : 125
-            if let e = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.numericPad, .function],
+            let esc = args.first == "esc"
+            let code: UInt16 = esc ? 53 : args.first == "up" ? 126 : 125
+            if let e = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: esc ? [] : [.numericPad, .function],
                                         timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: c.window?.windowNumber ?? 0,
                                         context: nil, characters: char, charactersIgnoringModifiers: char, isARepeat: false, keyCode: code) {
                 write("keyevent \(args.first ?? "") handled \(NSApp.mainMenu?.performKeyEquivalent(with: e) ?? false) keyWindow \(NSApp.keyWindow === c.window) mainWindow \(NSApp.mainWindow === c.window)")
@@ -391,7 +392,7 @@ final class SelfTest {
         "space": " ", "delete": "\u{8}", "fwddelete": String(Character(UnicodeScalar(UInt16(NSDeleteFunctionKey))!)),
         "home": String(Character(UnicodeScalar(UInt16(NSHomeFunctionKey))!)),
         "end": String(Character(UnicodeScalar(UInt16(NSEndFunctionKey))!)),
-        "comma": ",", "period": ".",
+        "comma": ",", "period": ".", "esc": "\u{1b}",
         "up": String(Character(UnicodeScalar(UInt16(NSUpArrowFunctionKey))!)),
         "down": String(Character(UnicodeScalar(UInt16(NSDownArrowFunctionKey))!)),
     ]

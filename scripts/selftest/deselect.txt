@@ -1,0 +1,20 @@
+# Esc deselects regions and clears the range. Nothing is played.
+wait 1
+import /tmp/tape-m6-a.wav
+waitLoaded
+view 0 500
+mouse click f30000 wave
+mouse down f96000 wave
+mouse drag f144000 wave
+mouse up f144000 wave
+log region selected, range 96000..<144000
+key esc
+log after Esc (Edit > Deselect All by its key): nothing selected, no range
+mouse click f30000 wave
+key esc
+log Esc again: nothing selected
+key esc
+log Esc with nothing selected: no change
+key cmd+l
+wait 4
+quit
