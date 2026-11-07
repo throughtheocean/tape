@@ -24,6 +24,7 @@
 		61DA5651EAAC148B7931AC3C /* EditorController+Tracks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 673E0BA64A4334F7B01EBAF2 /* EditorController+Tracks.swift */; };
 		6A28821FA87E29E334D3957E /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 314F43268D44A239651F929E /* TimelineView.swift */; };
 		76A2D1DC7ED95AD0A9CFDE84 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0B97B8EB63527C26C8D04B /* main.swift */; };
+		8340375B4A3FBE50A27312F1 /* Theme+Tape.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A90DF3CCB1321122D49F1C4 /* Theme+Tape.swift */; };
 		867C8C3C8F2071481D9F7894 /* ZoomBars.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A45754EF627C1A421E4EA2 /* ZoomBars.swift */; };
 		882AE7F859184C1CF43830C2 /* FadeDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBA048A20C51244AA1C1FB0A /* FadeDialog.swift */; };
 		9177290C0DB1B1CEDB22B8C6 /* ProcessSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5090E27854184DB6870B8F0C /* ProcessSession.swift */; };
@@ -61,6 +62,7 @@
 		6C6E5C15D1404550C948BCF5 /* TimelineRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineRenderer.swift; sourceTree = "<group>"; };
 		6E4C33FC83E2C6915F8C1C3F /* EditorController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditorController.swift; sourceTree = "<group>"; };
 		758B0F2C8BCA03D08FC49E71 /* Tape.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Tape.entitlements; sourceTree = "<group>"; };
+		7A90DF3CCB1321122D49F1C4 /* Theme+Tape.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Theme+Tape.swift"; sourceTree = "<group>"; };
 		7CB692CA19EE450EA90C3C42 /* Shaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = Shaders.metal; sourceTree = "<group>"; };
 		7FDAF8C4D9AAD0F76BFB374C /* RecordController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordController.swift; sourceTree = "<group>"; };
 		80BA9C483C0A752146EB7098 /* TrackInspector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackInspector.swift; sourceTree = "<group>"; };
@@ -123,6 +125,7 @@
 				B6E6CC35575F8BC4EA331E2F /* Benchmark.swift */,
 				C32BD636D5C7DA0595E10C3F /* SelfTest.swift */,
 				48E068AC01D2C3FDC47FE76D /* Theme.swift */,
+				7A90DF3CCB1321122D49F1C4 /* Theme+Tape.swift */,
 				3837FBB61B2023113976DFF6 /* TimeFormat.swift */,
 			);
 			path = Support;
@@ -331,6 +334,7 @@
 				34A852E77964DEDE6F829DA6 /* Shaders.metal in Sources */,
 				088A1C6E6CFE006CEA282187 /* SidebarResizeHandle.swift in Sources */,
 				E720119E65817EF107EA1B0F /* TapeDocument.swift in Sources */,
+				8340375B4A3FBE50A27312F1 /* Theme+Tape.swift in Sources */,
 				A87396E038103BA1495C40A3 /* Theme.swift in Sources */,
 				295AA51E63C9D3F4262B3D73 /* TimeFormat.swift in Sources */,
 				2A717C0A6D59E605B6A95A5A /* TimelineInteraction.swift in Sources */,
