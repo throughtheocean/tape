@@ -1268,3 +1268,20 @@ By hand, `scripts/selftest/quit-ask.txt` (`askquit` runs the same questions as C
 By hand, `scripts/selftest/click-playhead.txt`: single view click moved the playhead to 60000; in the multitrack view clicks on the waveform and the name strip selected without moving it; Option-click moved it to 130000; a waveform drag marked 19992..<40008 (zero crossing snap) and left it; P turned it on for the multitrack view only (a click went to 90000), P in the single view turned it off there, and the multitrack view kept its own setting.
 
 Regressions against the previous commit (`loop-selection`, `m10a-au-preview`, `m10c-magnetic`, `m10a-only-drop-overlap`, `m6-multitrack`): region states identical. The differences are the intended one (Shift drag ranges in the multitrack view no longer move the playhead, so later states show the playhead where it was), playback timing noise, and the order of two files dropped together, which also varies between two runs of the old build.
+
+## Release: signing and notarization (Maik's spec)
+
+- `scripts/release.sh` rewritten to the spec: identity from `security find-identity` (exactly one Developer ID Application required, team taken from it), Release build, `dist/Tape.app`, `codesign --force --deep --options runtime --timestamp`, signature checks (runtime flag, authority, timestamp, entitlement), notarization with the keychain profile `notary` (prints the notary log and stops unless Accepted), staple, `spctl` must report "Notarized Developer ID", final zip from the stapled app, then the same for a DMG. Version from the built Info.plist. `set -euo pipefail`; reruns replace that version's files.
+- Deviation: the signing command also passes `--entitlements App/Tape.entitlements`; without it re-signing drops the microphone entitlement and recording fails under Hardened Runtime.
+- Deviation: only uncommitted changes to tracked files stop the script; untracked files do not affect the build.
+- `ExportOptions.plist` removed (unused); `dist/` ignored; `README.md` with a Release section; `docs/betrieb.md` updated.
+
+First run, 0.10.0, exit 0:
+- Signature: `flags=0x10000(runtime)`, `Authority=Developer ID Application: Maik Bluhm (PRQ9CL3URA)`, `Timestamp=8. Nov 2026 at 13:59:08`, `TeamIdentifier=PRQ9CL3URA`.
+- App notarization `2a7dfcd4-1810-4751-8ced-7f1a8b3875a5`: Accepted (about 4 hours; first submissions of a team get a longer review). Stapled and validated. `spctl`: `accepted`, `source=Notarized Developer ID`.
+- DMG notarization `cd218da3-3518-429f-81d8-d6877450b5c8`: Accepted. Stapled and validated. `spctl`: `accepted`, `source=Notarized Developer ID`.
+- The DMG signing waited about an hour on a keychain access dialog while the screen was locked; answering it with Always Allow avoids that next time.
+- The final zip, unpacked elsewhere: stapler validates, `spctl` accepts it as Notarized Developer ID, microphone entitlement present.
+- Output: `dist/Tape-0.10.0.zip`, `dist/Tape-0.10.0.dmg`.
+
+Open: the check on a second Mac (no Gatekeeper dialog, microphone prompt on the first recording).
