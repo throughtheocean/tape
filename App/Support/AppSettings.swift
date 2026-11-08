@@ -122,6 +122,15 @@ final class AppSettings: ObservableObject {
     static let nudgeChoices: [Double] = [1, 10, 100]
     static let crossfadeChoices: [Double] = [5, 10, 20, 50]
 
+    /// Whether a click in the timeline moves the playhead, per view. Off: only the ruler or Option-click does.
+    @Published var clickLocatesSingle: Bool {
+        didSet { defaults.set(clickLocatesSingle, forKey: "clickLocatesSingle") }
+    }
+
+    @Published var clickLocatesMulti: Bool {
+        didSet { defaults.set(clickLocatesMulti, forKey: "clickLocatesMulti") }
+    }
+
     /// Cut Out crossfades the join (and fades the edges when the gap stays).
     @Published var crossfadeCuts: Bool {
         didSet { defaults.set(crossfadeCuts, forKey: "crossfadeCuts") }
@@ -201,6 +210,8 @@ final class AppSettings: ObservableObject {
         defaultFadeMs = defaults.object(forKey: "defaultFadeMs") as? Double ?? 10
         nudgeMs = defaults.object(forKey: "nudgeMs") as? Double ?? 10
         crossfadeCuts = defaults.object(forKey: "crossfadeCuts") as? Bool ?? true
+        clickLocatesSingle = defaults.object(forKey: "clickLocatesSingle") as? Bool ?? true
+        clickLocatesMulti = defaults.object(forKey: "clickLocatesMulti") as? Bool ?? false
         crossfadeMs = defaults.object(forKey: "crossfadeMs") as? Double ?? 10
     }
 }

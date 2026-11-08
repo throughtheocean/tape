@@ -22,6 +22,15 @@ struct TransportPanel: View {
             .toggleStyle(.button)
             .help("Loop the range, else the selected regions, else everything (Command L)")
 
+            Toggle(isOn: Binding(get: { editor.clickLocates }, set: { editor.clickLocates = $0 })) {
+                Image(systemName: "cursorarrow.click")
+                    .foregroundStyle(editor.clickLocates ? Color.white : Color.primary)
+            }
+            .toggleStyle(.button)
+            .help(editor.clickLocates
+                  ? "Clicks in the timeline move the playhead (P). Remembered for each view."
+                  : "Clicks only select; the ruler or Option-click moves the playhead (P). Remembered for each view.")
+
             Button("Split") { editor.blade() }
                 .font(.system(size: 11))
                 .disabled(editor.project.regions.isEmpty)

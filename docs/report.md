@@ -1257,3 +1257,14 @@ Note: an early experiment for this put `{region}` on the general clipboard; late
 - Help page: new section "Saving and quitting".
 
 By hand, `scripts/selftest/quit-ask.txt` (`askquit` runs the same questions as Command Q without quitting): an empty session asks nothing; with audio the question lists the four buttons; Cancel and Esc stop the quit; Export Audio opened the export sheet, wrote `/tmp/tape-quit/mix.wav` (1.1 MB) and let the quit go on; afterwards the session counts as exported until a split changes it; Quit goes on. Screenshot of the question checked. Not covered by the harness: the save panel (it needs a person), and a saved, named session (the harness cannot open one), which takes the same path with the export question only.
+
+## Click moves playhead, per view (Maik's request)
+
+- New toggle in the transport (arrow-click symbol, white on the blue "on" button) and Playback > Click Moves Playhead (**P**). On: a click in the timeline moves the playhead, as before. Off: clicks only select regions and Shift clicks only start a mark; the playhead moves by the ruler (click or drag), Option-click anywhere, I and O, Home and End, J K L.
+- Remembered per view, as Maik chose: on in the single view, off in the multitrack view by default. P and the button change the setting of the view you are in.
+- With it off, playback no longer jumps when you select regions in the multitrack view.
+- Shortcut list and help page updated.
+
+By hand, `scripts/selftest/click-playhead.txt`: single view click moved the playhead to 60000; in the multitrack view clicks on the waveform and the name strip selected without moving it; Option-click moved it to 130000; a waveform drag marked 19992..<40008 (zero crossing snap) and left it; P turned it on for the multitrack view only (a click went to 90000), P in the single view turned it off there, and the multitrack view kept its own setting.
+
+Regressions against the previous commit (`loop-selection`, `m10a-au-preview`, `m10c-magnetic`, `m10a-only-drop-overlap`, `m6-multitrack`): region states identical. The differences are the intended one (Shift drag ranges in the multitrack view no longer move the playhead, so later states show the playhead where it was), playback timing noise, and the order of two files dropped together, which also varies between two runs of the old build.

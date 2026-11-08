@@ -105,6 +105,7 @@ enum MainMenu {
         item(play, "Record", #selector(MainWindowController.toggleRecord(_:)), "r", [])
         play.addItem(.separator())
         item(play, "Loop Playback", #selector(MainWindowController.toggleLoop(_:)), "l")
+        item(play, "Click Moves Playhead", #selector(MainWindowController.toggleClickLocates(_:)), "p", [])
         play.addItem(.separator())
         item(play, "Go to Beginning", #selector(MainWindowController.goToStart(_:)), key(NSHomeFunctionKey), [])
         item(play, "Go to End", #selector(MainWindowController.goToEnd(_:)), key(NSEndFunctionKey), [])

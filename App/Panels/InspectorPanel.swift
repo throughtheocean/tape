@@ -54,6 +54,8 @@ struct InspectorPanel: View {
         shortcut("Shift drag", "Mark a range")
         shortcut("Option X", "Clear range")
         shortcut("Command L", "Loop playback")
+        shortcut("P", "Click moves playhead, on or off")
+        shortcut("Option click", "Move playhead anyway")
         shortcut("Command A", "Select all regions")
         shortcut("Esc", "Deselect regions and range")
         shortcut("B  A", "Blade tool, select tool")

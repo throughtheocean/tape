@@ -606,6 +606,7 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
     @objc func resetLoudness(_ sender: Any?) { editor.resetLoudness() }
 
     @objc func toggleCrossfadeCuts(_ sender: Any?) { AppSettings.shared.crossfadeCuts.toggle() }
+    @objc func toggleClickLocates(_ sender: Any?) { editor.clickLocates.toggle() }
 
     @objc func toggleSnapToZero(_ sender: Any?) {
         AppSettings.shared.snapToZeroCrossing.toggle()
@@ -636,6 +637,9 @@ final class MainWindowController: NSWindowController, NSWindowDelegate, NSMenuIt
             return true
         case #selector(toggleSnapToZero(_:)):
             item.state = AppSettings.shared.snapToZeroCrossing ? .on : .off
+            return true
+        case #selector(toggleClickLocates(_:)):
+            item.state = editor.clickLocates ? .on : .off
             return true
         case #selector(toggleCrossfadeCuts(_:)):
             item.state = AppSettings.shared.crossfadeCuts ? .on : .off

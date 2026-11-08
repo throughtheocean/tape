@@ -317,6 +317,8 @@ final class SelfTest {
         let s = AppSettings.shared
         switch args[0] {
         case "snap": s.snapToZeroCrossing = args[1] == "on"
+        case "clicksingle": s.clickLocatesSingle = args[1] == "on"
+        case "clickmulti": s.clickLocatesMulti = args[1] == "on"
         case "crossfade":
             if let ms = Double(args[1]) { s.crossfadeMs = ms } else { s.crossfadeCuts = args[1] == "on" }
         case "target": s.loudnessTarget = Double(args[1]) ?? 0

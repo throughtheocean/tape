@@ -1,0 +1,37 @@
+# Click moves playhead: on in the single view, off in the multitrack view by default, P toggles for the current view,
+# Option-click and the ruler always move it. Nothing is played.
+wait 1
+set clicksingle on
+set clickmulti off
+import /tmp/tape-m6-a.wav
+waitLoaded
+view 0 500
+mouse click f60000 wave
+log single view, on: the click selects the region and moves the playhead to 60000
+key shift+cmd+m
+view 0 500
+mouse click f120000 wave
+log multitrack, off: the click selects, the playhead stays at 60000
+mouse click f150000 strip
+log a click on the name strip: playhead still 60000
+mouse click f130000 wave opt
+log Option-click: playhead 130000
+mouse down f20000 wave
+mouse drag f40000 wave
+mouse up f40000 wave
+log drag in the waveform marks 20000..<40000, playhead still 130000
+key esc
+mouse click f30000 wave shift
+log Shift click with no range starts a mark, playhead still 130000
+key esc
+key p
+mouse click f90000 wave
+log P turned it on in the multitrack view: playhead 90000
+key shift+cmd+m
+key p
+mouse click f10000 wave
+log single view, P turned it off there: playhead stays 90000
+key shift+cmd+m
+mouse click f170000 wave
+log back in multitrack it is still on: playhead 170000
+quit

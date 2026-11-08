@@ -173,7 +173,7 @@ extension TimelineMetalView {
                 editor.setRange(SampleRange(start: anchor, end: snapped))
             } else {
                 drag = .mark(anchor: snapped)
-                editor.locate(snapped)
+                if editor.clickLocates || flags.contains(.option) { editor.locate(snapped) }
             }
             return
         }
@@ -385,10 +385,11 @@ extension TimelineMetalView {
     override func mouseUp(with event: NSEvent) {
         let p = convert(event.locationInWindow, from: nil)
         let doc = editor.document
+        let locates = editor.clickLocates || event.modifierFlags.contains(.option)
         switch drag {
         case let .pressRegion(id, _, _, _), let .pressWave(id, _, _):
             editor.selection = [id]
-            editor.locate(frameAt(p))
+            if locates { editor.locate(frameAt(p)) }
         case let .move(_, _, _, copies): doc.endGesture(copies == nil ? "Move" : "Copy")
         case let .connect(ids, downFrame):
             if let target = connectTarget(at: p, excluding: ids) {
@@ -407,7 +408,7 @@ extension TimelineMetalView {
         case .fadeShape: doc.endGesture("Fade Shape")
         case let .pressEmpty(_, _, additive):
             if !additive { editor.selection = [] }
-            editor.locate(frameAt(p))
+            if locates { editor.locate(frameAt(p)) }
         default:
             break
         }

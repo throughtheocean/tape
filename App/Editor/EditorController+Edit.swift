@@ -127,6 +127,14 @@ extension EditorController {
         headerFocused = false
     }
 
+    /// Whether a click in the timeline moves the playhead in the current view (Option-click always does).
+    var clickLocates: Bool {
+        get { multitrack ? AppSettings.shared.clickLocatesMulti : AppSettings.shared.clickLocatesSingle }
+        set {
+            if multitrack { AppSettings.shared.clickLocatesMulti = newValue } else { AppSettings.shared.clickLocatesSingle = newValue }
+        }
+    }
+
     /// Esc: no selected regions, no marked range.
     func deselectAll() {
         selection = []
